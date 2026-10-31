@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: campusverse-postgres
+    environment:
+      POSTGRES_DB: campusverse
+      POSTGRES_USER: campusverse
+      POSTGRES_PASSWORD: change-me-locally
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - campusverse-network
+
+  backend:
+    build: ./backend
+    container_name: campusverse-backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/campusverse
+      POSTGRES_USER: campusverse
+      POSTGRES_PASSWORD: change-me-locally
+      JWT_SECRET: dev-secret-change-in-production-must-be-256-bits-minimum-length
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    networks:
+      - campusverse-network
+
+  frontend:
+    build: ./frontend
+    container_name: campusverse-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - campusverse-network
+
+volumes:
+  postgres_data:
+
+networks:
+  campusverse-network:
+    driver: bridge
