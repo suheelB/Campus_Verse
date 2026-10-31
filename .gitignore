@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+backend/target/
+
+# Build outputs
+frontend/dist/
+frontend/build/
+*.jar
+*.war
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Docker
+docker-compose.override.yml
+
+# Maven
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# Misc
+*.pem
+.vercel
+.netlify
