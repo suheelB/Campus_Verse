@@ -21,6 +21,7 @@ import { LandingPage } from '@/features/auth/LandingPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { RegisterPage } from '@/features/auth/RegisterPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { ProfilePage } from '@/features/profile/ProfilePage'
 import { AuthProvider, useAuth } from '@/features/auth/AuthContext'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -72,6 +73,14 @@ export default function App() {
               element={
                 <PrivateRoute>
                   <DashboardPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <PrivateRoute>
+                  <ProfilePage />
                 </PrivateRoute>
               }
             />

@@ -10,6 +10,7 @@ import com.campusverse.identity.domain.User;
 import com.campusverse.identity.repository.UserRepository;
 import com.campusverse.identity.security.JwtTokenProvider;
 import com.campusverse.shared.errors.ApiError;
+import com.campusverse.students.service.StudentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class AuthService {
     private final CollegeRepository collegeRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final StudentService studentService;
 
     public AuthResponse register(RegisterRequest request) {
         College college = collegeRepository.findBySlug(request.getCollegeSlug())
@@ -44,6 +46,8 @@ public class AuthService {
                 .build();
 
         user = userRepository.save(user);
+
+        studentService.createEmptyProfile(user.getId());
 
         String token = jwtTokenProvider.generateToken(
                 user.getId(),
