@@ -10,6 +10,9 @@ export function Header() {
 
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: BookOpen },
+    { href: '/clubs', label: 'Discover clubs', icon: BookOpen },
+    { href: '/my-clubs', label: 'My clubs', icon: BookOpen },
+    { href: '/clubs/manage', label: 'Manage clubs', icon: BookOpen },
   ]
 
   const authLinks = user ? (

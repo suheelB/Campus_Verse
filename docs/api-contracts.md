@@ -26,42 +26,25 @@ Standard JSON responses. Errors follow RFC 9457 Problem Details or consistent JS
 - `POST /api/v1/auth/logout` — Terminate session.
 - `GET /api/v1/auth/me` — Get current authenticated user profile.
 
-### Clubs
-- `GET /api/v1/clubs` — List/search clubs (with category, search, pagination).
-- `POST /api/v1/clubs` — Propose a new club.
-- `GET /api/v1/clubs/{clubId}` — Get club details.
-- `PATCH /api/v1/clubs/{clubId}` — Update club details.
-- `POST /api/v1/clubs/{clubId}/submit-for-approval` — Submit club for admin review.
-- `POST /api/v1/clubs/{clubId}/approve` — Approve club (Admin).
-- `POST /api/v1/clubs/{clubId}/reject` — Reject club (Admin).
+### Clubs and memberships — implemented routes
+- `GET /api/v1/clubs` — College-scoped active-club directory; accepts `search`, `category`, `page`, and `size` (maximum 50).
+- `GET /api/v1/clubs/categories` — Available categories.
+- `GET /api/v1/clubs/{clubId}` — Same-college club detail.
+- `POST /api/v1/clubs` — Submit a club request; creates `PENDING_APPROVAL`.
+- `GET /api/v1/clubs/mine` — Current user's submitted club requests and decisions.
+- `GET /api/v1/clubs/requests` — Pending college approvals (college administrator only).
+- `POST /api/v1/clubs/{clubId}/approve` and `POST /api/v1/clubs/{clubId}/reject` — Decide a pending request (college administrator only); rejection accepts `{ "reason": "..." }`.
+- `GET /api/v1/clubs/{clubId}/members?status=ACTIVE` — Club members (authorized club officer or college administrator).
+- `GET /api/v1/clubs/{clubId}/membership-requests` — Pending membership applications (authorized officer/admin).
+- `GET /api/v1/clubs/{clubId}/roles` — Club roles (authorized officer/admin).
+- `POST /api/v1/memberships/clubs/{clubId}` — Apply or reapply to join.
+- `DELETE /api/v1/memberships/clubs/{clubId}` — Leave current membership.
+- `GET /api/v1/memberships/me` — Current user's memberships and application statuses.
+- `POST /api/v1/memberships/{membershipId}/approve` and `/reject` — Decide an application (authorized officer/admin; self-approval is denied).
+- `PUT /api/v1/memberships/{membershipId}/role` — Assign an existing role from the same club (authorized officer/admin); body `{ "roleId": "..." }`.
 
-### Memberships
-- `POST /api/v1/clubs/{clubId}/membership-applications` — Apply to join club.
-- `GET /api/v1/clubs/{clubId}/membership-applications` — List applications (Officer).
-- `POST /api/v1/clubs/{clubId}/membership-applications/{applicationId}/approve` — Approve application.
-- `POST /api/v1/clubs/{clubId}/membership-applications/{applicationId}/reject` — Reject application.
-- `POST /api/v1/clubs/{clubId}/leave` — Leave club.
-- `GET /api/v1/clubs/{clubId}/members` — List active club members.
+Club and membership endpoints require authentication. Club and membership lookups are scoped to the signed-in user's college. New club requests are hidden from the directory until approved.
 
-### Announcements
-- `GET /api/v1/announcements` — List visible announcements.
-- `POST /api/v1/clubs/{clubId}/announcements` — Create announcement.
-- `POST /api/v1/announcements/{announcementId}/publish` — Publish announcement.
-- `POST /api/v1/announcements/{announcementId}/acknowledge` — Acknowledge announcement.
+### Future endpoints — not implemented
+- Announcement, event, attendance, notification, and admin dashboard routes listed below are planned contracts, not available APIs.
 
-### Events & Attendance
-- `GET /api/v1/events` — List published events.
-- `POST /api/v1/clubs/{clubId}/events` — Create event.
-- `GET /api/v1/events/{eventId}` — Event details.
-- `POST /api/v1/events/{eventId}/registrations` — Register for event.
-- `DELETE /api/v1/events/{eventId}/registrations/me` — Cancel registration.
-- `POST /api/v1/events/{eventId}/check-in` — Check in attendee (Organizer).
-- `GET /api/v1/events/{eventId}/attendance` — View attendance records.
-
-### Notifications
-- `GET /api/v1/notifications` — List user notifications.
-- `POST /api/v1/notifications/{notificationId}/read` — Mark notification read.
-
-### Admin
-- `GET /api/v1/admin/dashboard` — Admin overview.
-- `GET /api/v1/admin/audit-logs` — View audit logs.

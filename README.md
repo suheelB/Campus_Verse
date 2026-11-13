@@ -158,21 +158,33 @@ campusverse/
 └── README.md
 ```
 
-## API Endpoints
+## API endpoints
+- `GET /api/v1/health` - Backend/database health check.
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` - Authentication and current-user endpoints.
 
-### Health
-- `GET /api/v1/health` - System health check
+## Clubs
+- `GET /api/v1/clubs` - Search and browse clubs in the signed-in user's college (supports `search`, `category`, `page`, and `size`).
+- `GET /api/v1/clubs/categories` - List club categories.
+- `GET /api/v1/clubs/{clubId}` - Get same-college club details.
+- `POST /api/v1/clubs` - Submit a new club request for administrator approval.
+- `GET /api/v1/clubs/mine` - See your submitted club requests.
+- `GET /api/v1/clubs/requests` - College administrator approval queue.
+- `POST /api/v1/clubs/{clubId}/approve` - Approve a pending club request.
+- `POST /api/v1/clubs/{clubId}/reject` - Reject a pending club request.
 
-### Authentication
-- `POST /api/v1/auth/register` - Register new user
-- `POST /api/v1/auth/login` - Login
-- `POST /api/v1/auth/logout` - Logout
-- `GET /api/v1/auth/me` - Get current user
+## Memberships
+- `POST /api/v1/memberships/clubs/{clubId}` - Apply/reapply to join an active club.
+- `GET /api/v1/memberships/me` - List your memberships and application statuses.
+- `DELETE /api/v1/memberships/clubs/{clubId}` - Leave a club.
+- `GET /api/v1/clubs/{clubId}/membership-requests` - Officer/admin review queue.
+- `POST /api/v1/memberships/{membershipId}/approve` - Approve a membership application.
+- `POST /api/v1/memberships/{membershipId}/reject` - Reject a membership application.
+- `GET /api/v1/clubs/{clubId}/members` - List club members (authorized officers/admins).
+- `GET /api/v1/clubs/{clubId}/roles` - List club roles (authorized officers/admins).
+- `PUT /api/v1/memberships/{membershipId}/role` - Assign a role in that club (authorized officers/admins).
 
-### Clubs (coming soon)
-- `GET /api/v1/clubs` - List clubs
-- `POST /api/v1/clubs` - Create club
-- `GET /api/v1/clubs/{id}` - Get club details
+All endpoints except health and authentication require a bearer token. See `docs/api-contracts.md` for access rules. Announcement, event, attendance, and notification endpoints are future work, not active routes.
+
 
 ## Testing
 

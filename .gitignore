@@ -42,5 +42,8 @@ backend/.mvn/wrapper/maven-wrapper.jar
 
 # Misc
 *.pem
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
 .vercel
 .netlify

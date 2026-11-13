@@ -23,6 +23,10 @@ import { RegisterPage } from '@/features/auth/RegisterPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { AuthProvider, useAuth } from '@/features/auth/AuthContext'
+import { ClubsPage } from '@/features/clubs/ClubsPage'
+import { ClubDetailPage } from '@/features/clubs/ClubDetailPage'
+import { MyClubsPage } from '@/features/clubs/MyClubsPage'
+import { ClubManagementPage } from '@/features/clubs/ClubManagementPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -81,6 +85,38 @@ export default function App() {
               element={
                 <PrivateRoute>
                   <ProfilePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/clubs"
+              element={
+                <PrivateRoute>
+                  <ClubsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/clubs/manage"
+              element={
+                <PrivateRoute>
+                  <ClubManagementPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/my-clubs"
+              element={
+                <PrivateRoute>
+                  <MyClubsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/clubs/:id"
+              element={
+                <PrivateRoute>
+                  <ClubDetailPage />
                 </PrivateRoute>
               }
             />

@@ -47,47 +47,37 @@ CampusVerse uses PostgreSQL as the relational data store. All primary keys are U
 - `created_at` TIMESTAMPTZ NOT NULL
 - `updated_at` TIMESTAMPTZ NOT NULL
 
+### `club_categories`
+- `id` UUID PK
+- `name` VARCHAR(100) UNIQUE NOT NULL
+- `slug` VARCHAR(100) UNIQUE NOT NULL
+- `description` TEXT, `icon` VARCHAR(50), `display_order` INT
+- `created_at`, `updated_at` TIMESTAMPTZ NOT NULL
+
 ### `clubs`
-- `id` UUID PK
-- `college_id` UUID FK NOT NULL REFERENCES colleges(id)
-- `name` VARCHAR(255) NOT NULL
-- `slug` VARCHAR(100) NOT NULL
-- `description` TEXT NOT NULL
-- `category` VARCHAR(100) NOT NULL
-- `status` VARCHAR(50) DEFAULT 'DRAFT' NOT NULL (`DRAFT`, `PENDING_APPROVAL`, `ACTIVE`, `REJECTED`, `SUSPENDED`, `ARCHIVED`)
-- `membership_policy` VARCHAR(50) DEFAULT 'OPEN' NOT NULL
-- `beginner_friendly` BOOLEAN DEFAULT TRUE NOT NULL
-- `meeting_information` TEXT
-- `created_by` UUID FK NOT NULL REFERENCES users(id)
-- `approved_by` UUID FK REFERENCES users(id)
-- `approved_at` TIMESTAMPTZ
-- `created_at` TIMESTAMPTZ NOT NULL
-- `updated_at` TIMESTAMPTZ NOT NULL
-- UNIQUE (`college_id`, `slug`)
+- `id` UUID PK; `college_id` FK NOT NULL; `category_id` nullable FK
+- `name` VARCHAR(255), `slug` VARCHAR(100), `description` TEXT, `short_description` VARCHAR(500)
+- `status`: `PENDING_APPROVAL`, `ACTIVE`, `SUSPENDED`, `ARCHIVED`, or `REJECTED`
+- `visibility`: `PUBLIC`, `PRIVATE`, or `INVITE_ONLY`; `require_approval` BOOLEAN; `max_members` INT nullable
+- `contact_email`, `social_links` JSONB, logo/banner object keys, `founded_at`
+- `created_by` nullable FK to users (Flyway V4); `approved_by` nullable FK; `approved_at`; `rejection_reason`
+- `created_at`, `updated_at`; UNIQUE (`college_id`, `slug`)
 
-### `club_memberships`
-- `id` UUID PK
-- `club_id` UUID FK NOT NULL REFERENCES clubs(id) ON DELETE CASCADE
-- `user_id` UUID FK NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- `status` VARCHAR(50) DEFAULT 'PENDING' NOT NULL (`PENDING`, `ACTIVE`, `REJECTED`, `LEFT`, `REMOVED`, `INVITED`, `SUSPENDED`)
-- `applied_at` TIMESTAMPTZ NOT NULL
-- `decided_at` TIMESTAMPTZ
-- `decided_by` UUID FK REFERENCES users(id)
-- `joined_at` TIMESTAMPTZ
-- `left_at` TIMESTAMPTZ
-- `created_at` TIMESTAMPTZ NOT NULL
-- `updated_at` TIMESTAMPTZ NOT NULL
-- UNIQUE (`club_id`, `user_id`)
+### `club_roles`
+- `id` UUID PK; `club_id` FK NOT NULL
+- `name`, `display_name`, `description`, `permissions` JSONB
+- `display_order`, `is_default`, timestamps; UNIQUE (`club_id`, `name`)
+- Approval creates `MEMBER` and `OFFICER`; the requester is assigned `OFFICER` with `MANAGE_MEMBERS` permission.
 
-### `club_role_assignments`
-- `id` UUID PK
-- `club_id` UUID FK NOT NULL REFERENCES clubs(id) ON DELETE CASCADE
-- `user_id` UUID FK NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- `role_key` VARCHAR(50) NOT NULL (`PRESIDENT`, `VICE_PRESIDENT`, `SECRETARY`, `EVENT_COORDINATOR`, `TREASURER`, `MEDIA_LEAD`, `TECHNICAL_LEAD`)
-- `assigned_by` UUID FK NOT NULL REFERENCES users(id)
-- `assigned_at` TIMESTAMPTZ NOT NULL
-- `revoked_at` TIMESTAMPTZ
-- UNIQUE (`club_id`, `user_id`, `role_key`)
+### `memberships`
+- `id` UUID PK; `club_id` FK NOT NULL; `user_id` FK NOT NULL; `role_id` nullable FK
+- `status`: `PENDING`, `ACTIVE`, `REJECTED`, `REVOKED`, `LEFT`, or `INVITED`
+- `applied_at`, `approved_at`, `approved_by`, `rejection_reason`, invitation fields, `left_at`, timestamps
+- UNIQUE (`club_id`, `user_id`); repeated applications after rejection/leave reuse the row.
+
+### `membership_invitations`
+- `id` UUID PK; `club_id` FK; `email`; optional `role_id`; `invited_by`; unique token
+- `status`, `expires_at`, `accepted_at`, timestamps
 
 ### `announcements`
 - `id` UUID PK
