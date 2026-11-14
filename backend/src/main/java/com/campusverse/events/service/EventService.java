@@ -46,9 +46,24 @@ public class EventService {
     @Transactional(readOnly = true)
     public Page<EventDto> listEvents(UUID collegeId, UUID clubId, Event.Status status, String search, Boolean upcoming, UUID userId, Pageable pageable) {
         Instant now = Instant.now();
-        // If not admin/officer, only PUBLISHED events are discovered
         Event.Status queryStatus = status != null ? status : Event.Status.PUBLISHED;
-        Page<Event> page = eventRepository.findEvents(collegeId, clubId, queryStatus, search, upcoming, now, pageable);
+        boolean hasSearch = (search != null && !search.trim().isEmpty());
+        String cleanSearch = hasSearch ? search.trim() : null;
+
+        Page<Event> page;
+        if (hasSearch) {
+            if (clubId != null) {
+                page = eventRepository.searchEventsByClub(collegeId, clubId, queryStatus, cleanSearch, upcoming, now, pageable);
+            } else {
+                page = eventRepository.searchEventsAllClubs(collegeId, queryStatus, cleanSearch, upcoming, now, pageable);
+            }
+        } else {
+            if (clubId != null) {
+                page = eventRepository.findEventsByClub(collegeId, clubId, queryStatus, upcoming, now, pageable);
+            } else {
+                page = eventRepository.findEventsAllClubs(collegeId, queryStatus, upcoming, now, pageable);
+            }
+        }
         return page.map(e -> toDto(e, userId));
     }
 

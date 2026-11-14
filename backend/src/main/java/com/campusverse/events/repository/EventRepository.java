@@ -20,16 +20,72 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
     @Query("""
         SELECT e FROM Event e
         WHERE e.college.id = :collegeId
-          AND (:clubId IS NULL OR e.primaryClub.id = :clubId)
           AND (:status IS NULL OR e.status = :status)
-          AND (:search IS NULL OR LOWER(e.title) LIKE LOWER(CONCAT('%', :search, '%'))
+          AND (:upcoming IS NULL
+               OR (:upcoming = true AND e.endsAt >= :now)
+               OR (:upcoming = false AND e.endsAt < :now))
+        ORDER BY e.startsAt ASC
+    """)
+    Page<Event> findEventsAllClubs(
+            @Param("collegeId") UUID collegeId,
+            @Param("status") Event.Status status,
+            @Param("upcoming") Boolean upcoming,
+            @Param("now") Instant now,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT e FROM Event e
+        WHERE e.college.id = :collegeId
+          AND e.primaryClub.id = :clubId
+          AND (:status IS NULL OR e.status = :status)
+          AND (:upcoming IS NULL
+               OR (:upcoming = true AND e.endsAt >= :now)
+               OR (:upcoming = false AND e.endsAt < :now))
+        ORDER BY e.startsAt ASC
+    """)
+    Page<Event> findEventsByClub(
+            @Param("collegeId") UUID collegeId,
+            @Param("clubId") UUID clubId,
+            @Param("status") Event.Status status,
+            @Param("upcoming") Boolean upcoming,
+            @Param("now") Instant now,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT e FROM Event e
+        WHERE e.college.id = :collegeId
+          AND (:status IS NULL OR e.status = :status)
+          AND (LOWER(e.title) LIKE LOWER(CONCAT('%', :search, '%'))
                OR LOWER(e.description) LIKE LOWER(CONCAT('%', :search, '%')))
           AND (:upcoming IS NULL
                OR (:upcoming = true AND e.endsAt >= :now)
                OR (:upcoming = false AND e.endsAt < :now))
         ORDER BY e.startsAt ASC
     """)
-    Page<Event> findEvents(
+    Page<Event> searchEventsAllClubs(
+            @Param("collegeId") UUID collegeId,
+            @Param("status") Event.Status status,
+            @Param("search") String search,
+            @Param("upcoming") Boolean upcoming,
+            @Param("now") Instant now,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT e FROM Event e
+        WHERE e.college.id = :collegeId
+          AND e.primaryClub.id = :clubId
+          AND (:status IS NULL OR e.status = :status)
+          AND (LOWER(e.title) LIKE LOWER(CONCAT('%', :search, '%'))
+               OR LOWER(e.description) LIKE LOWER(CONCAT('%', :search, '%')))
+          AND (:upcoming IS NULL
+               OR (:upcoming = true AND e.endsAt >= :now)
+               OR (:upcoming = false AND e.endsAt < :now))
+        ORDER BY e.startsAt ASC
+    """)
+    Page<Event> searchEventsByClub(
             @Param("collegeId") UUID collegeId,
             @Param("clubId") UUID clubId,
             @Param("status") Event.Status status,

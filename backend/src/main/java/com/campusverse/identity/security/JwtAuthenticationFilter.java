@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -40,11 +39,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (userOpt.isPresent() && userOpt.get().getStatus() == User.Status.ACTIVE) {
                 User user = userOpt.get();
-                UserDetails userDetails = org.springframework.security.core.userdetails.User
-                        .withUsername(user.getEmail())
-                        .password(user.getPasswordHash())
-                        .authorities(Collections.emptyList())
-                        .build();
+                // Build CustomUserDetails so @AuthenticationPrincipal CustomUserDetails works in controllers
+                CustomUserDetails userDetails = new CustomUserDetails(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getPasswordHash(),
+                        user.getCollegeId(),
+                        Collections.emptyList()
+                );
 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
