@@ -1,22 +1,45 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthContext'
-import { Menu, X, LogOut, BookOpen } from 'lucide-react'
+import { Menu, X, LogOut, BookOpen, Bell } from 'lucide-react'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { notificationsApi } from '@/services/notificationsApi'
 
 export function Header() {
   const { user, logout } = useAuth()
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
+  const unreadQuery = useQuery({
+    queryKey: ['notifications-unread-count'],
+    queryFn: notificationsApi.unreadCount,
+    enabled: !!user,
+    refetchInterval: 30000,
+  })
+  const unreadCount = unreadQuery.data?.count || 0
+
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: BookOpen },
     { href: '/clubs', label: 'Discover clubs', icon: BookOpen },
     { href: '/my-clubs', label: 'My clubs', icon: BookOpen },
+    { href: '/announcements', label: 'Announcements', icon: BookOpen },
     { href: '/clubs/manage', label: 'Manage clubs', icon: BookOpen },
   ]
 
   const authLinks = user ? (
     <>
+      <Link
+        to="/notifications"
+        className="relative inline-flex items-center justify-center rounded-lg p-2 text-gray-700 hover:bg-gray-100 hover:text-primary-600 transition-colors"
+        aria-label="Notifications"
+      >
+        <Bell className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </Link>
       <Link to="/dashboard" className="btn-primary">
         Dashboard
       </Link>
@@ -93,6 +116,12 @@ export function Header() {
             <div className="flex flex-col gap-2 pt-4 border-t border-gray-200">
               {user ? (
                 <>
+                  <Link to="/notifications" className="btn-outline flex items-center justify-between" onClick={() => setMobileMenuOpen(false)}>
+                    <span>Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs text-white font-bold">{unreadCount}</span>
+                    )}
+                  </Link>
                   <Link to="/dashboard" className="btn-primary" onClick={() => setMobileMenuOpen(false)}>
                     Dashboard
                   </Link>

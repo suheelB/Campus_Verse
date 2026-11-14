@@ -35,7 +35,32 @@
 - Sensitive club and membership decisions are permission-checked and persisted, but audit logging table is scheduled for Milestone 7.
 
 ## Milestone 4 — Announcements and notifications
-**Status:** Not started.
+**Status:** Completed and verified.
+
+### Implemented in this work
+- Added Flyway V5 migration (`V5__announcements_notifications.sql`) defining `announcements`, `announcement_receipts`, and `notifications` tables with foreign keys and deduplication indexes.
+- Added Announcement domain model supporting priorities (`NORMAL`, `IMPORTANT`, `URGENT`), target audiences (`ALL_COLLEGE`, `CLUB_MEMBERS`, `CLUB_OFFICERS`), statuses (`DRAFT`, `SCHEDULED`, `PUBLISHED`, `EXPIRED`, `ARCHIVED`), and acknowledgement requirements.
+- Implemented announcement publication and scheduling with permission boundary checks: club announcements require club officer permission (`MANAGE_MEMBERS`), while college-wide announcements require college administrator privileges.
+- Implemented audience-restricted announcement feed and view endpoints enforcing college isolation and club membership checks.
+- Implemented read receipts (`read_at`) and member acknowledgement tracking (`acknowledged_at`) with aggregate view/acknowledgement counts for authors and officers.
+- Implemented notification dispatch engine triggering in-app notifications to targeted club members with deduplication keys to prevent duplicate alerts.
+- Implemented user notifications API: list with pagination, unread badge counter (`GET /notifications/unread-count`), individual mark-as-read, and bulk `markAllAsRead`.
+- Built frontend announcements experience (`AnnouncementsPage.tsx`) with priority filter chips, pending acknowledgement filter, compose modal, and inline acknowledgement action.
+- Built frontend notifications inbox (`NotificationsPage.tsx`) with unread status indicators and mark-all-read capability.
+- Added live unread notification badge and navigation link to application header (`Header.tsx`).
+- Surfaced priority announcements and pending acknowledgement actions directly on student dashboard (`DashboardPage.tsx`).
+- Added and verified unit tests in `AnnouncementServiceTest` covering officer authorization, audience restrictions, college-wide admin requirement, and member acknowledgement workflow.
+- Added and verified frontend tests in `announcementsApi.test.ts` covering feed fetching, creation, acknowledgement, and notification read flows.
+
+### Verification
+- `npm --prefix frontend test`: 9/9 unit tests passed with Vitest.
+- `npm --prefix frontend run build`: passed cleanly (`tsc -b && vite build`).
+- `mvn test`: 9/9 unit tests passed (5 in `ClubServiceTest`, 4 in `AnnouncementServiceTest`).
+- Database migration V5 applied to PostgreSQL with all tables and indexes.
+
+### Known limitations and remaining work
+- Expired announcement background sweeper can be enhanced with scheduled cron in Milestone 7; query-level expiration filtering is active.
+- Email/SMS notification channels are deferred to post-MVP; in-app notification engine is active.
 
 ## Milestone 5 — Events and attendance
 **Status:** Not started.
