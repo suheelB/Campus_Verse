@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthContext'
-import { Menu, X, LogOut, BookOpen, Bell } from 'lucide-react'
+import { Menu, X, LogOut, BookOpen, Bell, Calendar } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { notificationsApi } from '@/services/notificationsApi'
@@ -22,6 +22,7 @@ export function Header() {
     { href: '/dashboard', label: 'Dashboard', icon: BookOpen },
     { href: '/clubs', label: 'Discover clubs', icon: BookOpen },
     { href: '/my-clubs', label: 'My clubs', icon: BookOpen },
+    { href: '/events', label: 'Events', icon: Calendar },
     { href: '/announcements', label: 'Announcements', icon: BookOpen },
     { href: '/clubs/manage', label: 'Manage clubs', icon: BookOpen },
   ]

@@ -63,10 +63,29 @@
 - Email/SMS notification channels are deferred to post-MVP; in-app notification engine is active.
 
 ## Milestone 5 — Events and attendance
-**Status:** Not started.
+**Status:** Complete.
+
+### Implemented capabilities
+- Database migration `V6__events_attendance.sql` defining `events`, `event_registrations`, and `event_attendance` with status constraints and performance indexes.
+- Complete backend event lifecycle:
+  - Event proposal creation, updates, publish, admin approval, rejection, and cancellation.
+  - College-scoped event discovery with upcoming/past filtering and text search.
+  - Deadlines and capacity enforcement with automated waitlist queueing when full.
+  - Safe, atomic waitlist promotion on registration cancellation with instant user notification.
+  - Organizer check-in desk (by user ID or email lookup) with idempotent attendance tracking and `ATTENDED` registration status updates.
+  - Turnout report endpoint calculating capacity, registered count, waitlisted count, attended count, and attendance turnout percentage.
+- Frontend event system:
+  - `EventsPage.tsx` with search, club filtering, upcoming/past toggle, registration indicators, and Host Event modal for authorized officers.
+  - `EventDetailPage.tsx` with full details, capacity meter, self-serve register/cancel actions, and organizer control center.
+  - `EventCheckInModal.tsx` for real-time attendee roster search, 1-click check-in, and manual email check-in.
+  - Top navigation bar and student dashboard integration with event quick links.
+- Verified test suites:
+  - Backend `EventServiceTest.java`: 8/8 tests passing (17/17 total backend tests passing).
+  - Frontend `eventsApi.test.ts`: 5/5 tests passing (14/14 total frontend tests passing).
+  - TypeScript compilation and Vite production build verified cleanly.
 
 ## Milestone 6 — Complete MVP integration
-**Status:** Not started.
+**Status:** In progress / ready for integration verification.
 
 ## Milestone 7 — Security, quality, and pilot readiness
 **Status:** Not started.

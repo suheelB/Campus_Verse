@@ -29,6 +29,8 @@ import { MyClubsPage } from '@/features/clubs/MyClubsPage'
 import { ClubManagementPage } from '@/features/clubs/ClubManagementPage'
 import { AnnouncementsPage } from '@/features/announcements/AnnouncementsPage'
 import { NotificationsPage } from '@/features/notifications/NotificationsPage'
+import { EventsPage } from '@/features/events/EventsPage'
+import { EventDetailPage } from '@/features/events/EventDetailPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -119,6 +121,22 @@ export default function App() {
               element={
                 <PrivateRoute>
                   <ClubDetailPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/events"
+              element={
+                <PrivateRoute>
+                  <EventsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/events/:id"
+              element={
+                <PrivateRoute>
+                  <EventDetailPage />
                 </PrivateRoute>
               }
             />

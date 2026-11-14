@@ -59,6 +59,23 @@ Club and membership endpoints require authentication. Club and membership lookup
 - `PUT /api/v1/notifications/{id}/read` — Mark notification as read.
 - `PUT /api/v1/notifications/read-all` — Mark all notifications as read.
 
+### Events, registration, and attendance — implemented routes
+- `GET /api/v1/events` — Paginated list of events scoped to the signed-in user's college; supports `search`, `clubId`, `status`, and `upcoming` (boolean) filters.
+- `GET /api/v1/events/{id}` — Event details including user-specific registration status and live capacity count.
+- `POST /api/v1/events` — Create event proposal or published event (club officer with `MANAGE_EVENTS`/`MANAGE_MEMBERS` or college administrator).
+- `PUT /api/v1/events/{id}` — Update event details (club officer or college administrator).
+- `POST /api/v1/events/{id}/publish` — Publish event for student discovery.
+- `POST /api/v1/events/{id}/cancel` — Cancel event and broadcast cancellation notification to all registered attendees.
+- `POST /api/v1/events/{id}/approve` — College admin approves event proposal (`PENDING_APPROVAL` -> `PUBLISHED`).
+- `POST /api/v1/events/{id}/reject` — College admin rejects event proposal with optional reason.
+- `POST /api/v1/events/{id}/register` — Student registers for event. Enforces deadline and capacity; automatically places student on waitlist if event capacity is reached.
+- `DELETE /api/v1/events/{id}/register` — Student cancels registration. Safely and atomically promotes the next waitlisted student to `REGISTERED` and dispatches notification.
+- `GET /api/v1/events/registrations/me` — Current student's event registrations and waitlist statuses.
+- `GET /api/v1/events/{id}/registrations` — Private roster of registered and waitlisted students (authorized club officer or college admin).
+- `POST /api/v1/events/{id}/check-in` — Organizer checks in attendee by user ID or email (idempotent, records timestamp, officer ID, and method; marks registration as `ATTENDED`).
+- `GET /api/v1/events/{id}/attendance` — Event check-in attendance list (authorized club officer or college admin).
+- `GET /api/v1/events/{id}/attendance/report` — Turnout and attendance rate report (capacity, total registered, waitlisted, attended, and percentage).
+
 ### Future endpoints — not implemented
-- Event, attendance, and pilot administrative export routes are planned contracts, not yet available APIs.
+- Pilot administrative audit export routes are planned contracts, not yet available APIs.
 
