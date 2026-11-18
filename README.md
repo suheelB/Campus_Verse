@@ -58,11 +58,11 @@ cd backend
 # Copy environment template
 cp ../.env.example .env
 
-# Run with Maven wrapper
-./mvnw spring-boot:run
+# Run with Maven
+mvn spring-boot:run
 
 # Or build and run the JAR
-./mvnw clean package -DskipTests
+mvn clean package -DskipTests
 java -jar target/campusverse-backend-0.0.1-SNAPSHOT.jar
 ```
 
@@ -97,8 +97,12 @@ npm run lint
 | `DATABASE_URL` | JDBC URL | `jdbc:postgresql://localhost:5432/campusverse` |
 | `SERVER_PORT` | Backend port | `8080` |
 | `CORS_ALLOWED_ORIGINS` | CORS origins | `http://localhost:5173` |
-| `JWT_SECRET` | JWT signing secret | Required (256+ bits) |
+| `JWT_SECRET` | JWT signing secret (32+ bytes) | Required (256+ bits) |
 | `JWT_EXPIRATION_MS` | Token expiry | `86400000` (24h) |
+| `AUTH_RATE_LIMIT_MAX_ATTEMPTS` | Login/registration attempts per window | `10` |
+| `AUTH_RATE_LIMIT_WINDOW_SECONDS` | Rate-limit window | `60` |
+| `MAINTENANCE_ANNOUNCEMENT_INTERVAL_MS` | Scheduled/expired announcement sweep interval | `60000` |
+| `MAINTENANCE_TOKEN_PURGE_INTERVAL_MS` | Revoked-token purge interval | `3600000` |
 | `APP_BASE_URL` | Frontend URL | `http://localhost:5173` |
 
 ## Database Migrations
@@ -108,7 +112,7 @@ Flyway migrations are located in `backend/src/main/resources/db/migration/`. The
 To run migrations manually:
 ```bash
 cd backend
-./mvnw flyway:migrate
+mvn flyway:migrate
 ```
 
 ## Project Structure
@@ -152,6 +156,7 @@ campusverse/
 │   ├── security-and-privacy.md
 │   ├── api-contracts.md
 │   ├── test-plan.md
+│   ├── pilot-readiness.md
 │   └── implementation-progress.md
 ├── docker-compose.yml
 ├── .env.example
@@ -183,7 +188,17 @@ campusverse/
 - `GET /api/v1/clubs/{clubId}/roles` - List club roles (authorized officers/admins).
 - `PUT /api/v1/memberships/{membershipId}/role` - Assign a role in that club (authorized officers/admins).
 
-All endpoints except health and authentication require a bearer token. See `docs/api-contracts.md` for access rules. Announcement, event, attendance, and notification endpoints are future work, not active routes.
+All endpoints except health and authentication require a bearer token. See `docs/api-contracts.md` for access rules.
+
+## Announcements, events, attendance, and notifications
+- `/api/v1/announcements`, `/api/v1/events`, `/api/v1/notifications` - Feed, lifecycle, registration, waitlist, check-in, turnout reporting, and in-app notifications.
+- `/api/v1/admin/audit-logs` - College-scoped audit trail for college/platform administrators (supports `action`, `entityType`, and `entityId` filters).
+- `POST /api/v1/auth/logout` revokes the presented token server-side.
+
+## Security
+- JWT logout revocation, audit logging, auth rate limiting, and security headers are documented in `docs/security-and-privacy.md`.
+- Operational hardening, secrets, backups, monitoring, incident response, and data retention are documented in `docs/pilot-readiness.md`.
+
 
 
 ## Testing
@@ -191,18 +206,29 @@ All endpoints except health and authentication require a bearer token. See `docs
 ### Backend
 ```bash
 cd backend
-./mvnw test
+mvn test
+```
+
+The event-capacity concurrency test uses a disposable database and is opt-in:
+```bash
+docker compose exec postgres createdb -U campusverse campusverse_it
+mvn -Dtest=EventRegistrationConcurrencyTest -Dcampusverse.it.enabled=true test
 ```
 
 ### Frontend
 ```bash
 cd frontend
+npm run lint
 npm run test
+npm run build
 ```
 
-### E2E (Playwright - coming soon)
+### E2E (Playwright)
+The end-to-end suite needs the Docker backend, PostgreSQL, and a Vite dev server
+on port 5174:
 ```bash
 cd frontend
+npm run dev -- --port 5174
 npm run test:e2e
 ```
 

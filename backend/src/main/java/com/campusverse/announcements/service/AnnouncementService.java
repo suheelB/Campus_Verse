@@ -14,6 +14,7 @@ import com.campusverse.colleges.domain.College;
 import com.campusverse.colleges.repository.CollegeRepository;
 import com.campusverse.identity.domain.User;
 import com.campusverse.identity.repository.UserRepository;
+import com.campusverse.audit.service.AuditService;
 import com.campusverse.notifications.service.NotificationService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,7 @@ public class AnnouncementService {
     private final CollegeRepository colleges;
     private final NotificationService notifications;
     private final JdbcTemplate jdbc;
+    private final AuditService audit;
 
     @Transactional(readOnly = true)
     public Page<AnnouncementDto> feed(UUID collegeId, UUID userId, Pageable pageable) {
@@ -98,6 +100,9 @@ public class AnnouncementService {
             if (!isCollegeAdmin(authorId, collegeId)) {
                 throw new AccessDeniedException("Only college administrators can publish college-wide announcements");
             }
+            if (request.getAudienceType() != Announcement.AudienceType.ALL_COLLEGE) {
+                throw new IllegalArgumentException("College-wide announcements must target the entire college");
+            }
         } else {
             club = clubs.findById(request.getClubId())
                     .orElseThrow(() -> new EntityNotFoundException("Club not found"));
@@ -105,6 +110,9 @@ public class AnnouncementService {
                 throw new EntityNotFoundException("Club not found");
             }
             requireOfficer(club, authorId, collegeId);
+            if (request.getAudienceType() == Announcement.AudienceType.ALL_COLLEGE) {
+                throw new IllegalArgumentException("Club announcements can only target club members or club officers");
+            }
         }
 
         Instant publishAt = request.getPublishAt() != null ? request.getPublishAt() : Instant.now();
@@ -129,9 +137,15 @@ public class AnnouncementService {
         announcement = announcements.save(announcement);
 
         // Notify eligible audience if published now
-        if (announcement.getStatus() == Announcement.Status.PUBLISHED && club != null) {
-            notifyClubMembers(club, announcement);
+        if (announcement.getStatus() == Announcement.Status.PUBLISHED) {
+            dispatchNotifications(announcement);
         }
+
+        audit.record(collegeId, authorId,
+                announcement.getStatus() == Announcement.Status.PUBLISHED
+                        ? "ANNOUNCEMENT_PUBLISH" : "ANNOUNCEMENT_CREATE",
+                "ANNOUNCEMENT", announcement.getId(),
+                Map.of("title", announcement.getTitle(), "status", announcement.getStatus().name()));
 
         return toDto(announcement, null);
     }
@@ -147,6 +161,14 @@ public class AnnouncementService {
             }
         }
 
+        if (announcement.getClub() == null && request.getAudienceType() != Announcement.AudienceType.ALL_COLLEGE) {
+            throw new IllegalArgumentException("College-wide announcements must target the entire college");
+        }
+        if (announcement.getClub() != null && request.getAudienceType() == Announcement.AudienceType.ALL_COLLEGE) {
+            throw new IllegalArgumentException("Club announcements can only target club members or club officers");
+        }
+
+        Announcement.Status previousStatus = announcement.getStatus();
         announcement.setTitle(request.getTitle().trim());
         announcement.setBody(request.getBody().trim());
         announcement.setPriority(request.getPriority());
@@ -158,7 +180,16 @@ public class AnnouncementService {
             announcement.setStatus(request.getStatus());
         }
 
-        return toDto(announcements.save(announcement), null);
+        announcement = announcements.save(announcement);
+        if (previousStatus != Announcement.Status.PUBLISHED && announcement.getStatus() == Announcement.Status.PUBLISHED) {
+            dispatchNotifications(announcement);
+        }
+        audit.record(collegeId, actorId,
+                previousStatus != Announcement.Status.PUBLISHED && announcement.getStatus() == Announcement.Status.PUBLISHED
+                        ? "ANNOUNCEMENT_PUBLISH" : "ANNOUNCEMENT_UPDATE",
+                "ANNOUNCEMENT", announcement.getId(),
+                Map.of("title", announcement.getTitle(), "status", announcement.getStatus().name()));
+        return toDto(announcement, null);
     }
 
     public AnnouncementDto acknowledge(UUID announcementId, UUID collegeId, UUID userId) {
@@ -175,6 +206,9 @@ public class AnnouncementService {
                         .build());
         receipt.setAcknowledgedAt(Instant.now());
         receipt = receipts.save(receipt);
+
+        audit.record(collegeId, userId, "ANNOUNCEMENT_ACKNOWLEDGE", "ANNOUNCEMENT", announcementId,
+                Map.of("title", announcement.getTitle()));
 
         return toDto(announcement, receipt);
     }
@@ -210,6 +244,66 @@ public class AnnouncementService {
     public List<AnnouncementDto> myCreated(UUID authorId, UUID collegeId) {
         return announcements.findByAuthorIdAndCollegeIdOrderByCreatedAtDesc(authorId, collegeId)
                 .stream().map(a -> toDto(a, null)).toList();
+    }
+
+    /**
+     * Promotes scheduled announcements whose publish time has arrived and sends
+     * their notifications. Invoked by the scheduled maintenance job.
+     */
+    public int publishScheduledDue(Instant now) {
+        List<Announcement> due = announcements.findDueForPublishing(now);
+        for (Announcement announcement : due) {
+            announcement.setStatus(Announcement.Status.PUBLISHED);
+            announcements.save(announcement);
+            dispatchNotifications(announcement);
+            audit.record(announcement.getCollege().getId(), announcement.getAuthor().getId(),
+                    "ANNOUNCEMENT_PUBLISH", "ANNOUNCEMENT", announcement.getId(),
+                    Map.of("title", announcement.getTitle(), "scheduled", true));
+        }
+        return due.size();
+    }
+
+    /**
+     * Marks published announcements past their expiry so they stop appearing in
+     * feeds. Invoked by the scheduled maintenance job.
+     */
+    public int expireDue(Instant now) {
+        List<Announcement> expired = announcements.findExpired(now);
+        for (Announcement announcement : expired) {
+            announcement.setStatus(Announcement.Status.EXPIRED);
+            announcements.save(announcement);
+            audit.record(announcement.getCollege().getId(), announcement.getAuthor().getId(),
+                    "ANNOUNCEMENT_EXPIRE", "ANNOUNCEMENT", announcement.getId(),
+                    Map.of("title", announcement.getTitle()));
+        }
+        return expired.size();
+    }
+
+    private void dispatchNotifications(Announcement announcement) {
+        if (announcement.getClub() != null) {
+            notifyClubMembers(announcement.getClub(), announcement);
+        } else {
+            notifyCollegeMembers(announcement);
+        }
+    }
+
+    private void notifyCollegeMembers(Announcement announcement) {
+        List<User> recipients = users.findByCollegeIdAndStatus(
+                announcement.getCollege().getId(), User.Status.ACTIVE);
+        for (User recipient : recipients) {
+            if (recipient.getId().equals(announcement.getAuthor().getId())) {
+                continue;
+            }
+            notifications.createNotification(
+                    recipient,
+                    "ANNOUNCEMENT",
+                    announcement.getTitle(),
+                    announcement.getBody().substring(0, Math.min(200, announcement.getBody().length())),
+                    "ANNOUNCEMENT",
+                    announcement.getId(),
+                    "announcement:" + announcement.getId() + ":" + recipient.getId()
+            );
+        }
     }
 
     private void notifyClubMembers(Club club, Announcement announcement) {

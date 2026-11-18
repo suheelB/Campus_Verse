@@ -1,5 +1,6 @@
 package com.campusverse.clubs.service;
 
+import com.campusverse.audit.service.AuditService;
 import com.campusverse.clubs.domain.Club;
 import com.campusverse.clubs.domain.ClubRole;
 import com.campusverse.clubs.domain.Membership;
@@ -35,11 +36,12 @@ class ClubServiceTest {
     @Mock CollegeRepository colleges;
     @Mock UserRepository users;
     @Mock JdbcTemplate jdbc;
+    @Mock AuditService audit;
     ClubService service;
 
     @BeforeEach
     void setUp() {
-        service = new ClubService(clubs, categories, roles, memberships, colleges, users, jdbc);
+        service = new ClubService(clubs, categories, roles, memberships, colleges, users, jdbc, audit);
     }
 
     @Test

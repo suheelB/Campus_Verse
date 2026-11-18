@@ -28,7 +28,8 @@ export function DashboardPage() {
   return <div className="mx-auto max-w-7xl space-y-8">
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div><p className="text-sm font-semibold uppercase tracking-wider text-primary-700">CampusVerse</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Welcome back, {user?.displayName || 'Student'}</h1><p className="mt-2 text-gray-600">Your clubs, notices, and applications, all in one place.</p></div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        <Link to="/profile" className="btn-outline gap-2"><Users className="h-4 w-4" />Edit profile</Link>
         <Link to="/events" className="btn-outline gap-2"><Calendar className="h-4 w-4" />Events</Link>
         <Link to="/announcements" className="btn-outline gap-2"><Megaphone className="h-4 w-4" />Notices</Link>
         <Link to="/clubs" className="btn-primary gap-2"><Plus className="h-4 w-4" />Find a club</Link>

@@ -23,8 +23,10 @@ Standard JSON responses. Errors follow RFC 9457 Problem Details or consistent JS
 ### Authentication
 - `POST /api/v1/auth/register` — Register a new student/user.
 - `POST /api/v1/auth/login` — Authenticate and obtain session/token.
-- `POST /api/v1/auth/logout` — Terminate session.
+- `POST /api/v1/auth/logout` — Revoke the presented bearer token server-side (`revoked_tokens`) and end the session.
 - `GET /api/v1/auth/me` — Get current authenticated user profile.
+
+Login and registration are rate limited per client address and endpoint; exceeding the budget returns `429` with a `Retry-After` header.
 
 ### Clubs and memberships — implemented routes
 - `GET /api/v1/clubs` — College-scoped active-club directory; accepts `search`, `category`, `page`, and `size` (maximum 50).
@@ -76,6 +78,9 @@ Club and membership endpoints require authentication. Club and membership lookup
 - `GET /api/v1/events/{id}/attendance` — Event check-in attendance list (authorized club officer or college admin).
 - `GET /api/v1/events/{id}/attendance/report` — Turnout and attendance rate report (capacity, total registered, waitlisted, attended, and percentage).
 
-### Future endpoints — not implemented
-- Pilot administrative audit export routes are planned contracts, not yet available APIs.
+### Administrators — implemented routes
+- `GET /api/v1/admin/audit-logs` — College-scoped audit trail for college and platform administrators. Accepts `action`, `entityType`, `entityId`, `page`, and `size`; the response page size is capped at 100. Non-administrators receive `403`, and entries are always scoped to the caller's college.
+
+## Audit events
+The API records audit entries for `AUTH_REGISTER`, `AUTH_LOGIN`, `AUTH_LOGOUT`, `CLUB_REQUEST`, `CLUB_APPROVE`, `CLUB_REJECT`, `MEMBERSHIP_APPLY`, `MEMBERSHIP_APPROVE`, `MEMBERSHIP_REJECT`, `MEMBERSHIP_LEAVE`, `MEMBERSHIP_ROLE_ASSIGN`, `ANNOUNCEMENT_CREATE`, `ANNOUNCEMENT_PUBLISH`, `ANNOUNCEMENT_EXPIRE`, `ANNOUNCEMENT_ACKNOWLEDGE`, `EVENT_CREATE`, `EVENT_UPDATE`, `EVENT_PUBLISH`, `EVENT_APPROVE`, `EVENT_REJECT`, `EVENT_CANCEL`, and `EVENT_CHECK_IN`.
 

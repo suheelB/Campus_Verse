@@ -11,6 +11,7 @@ export interface UserDto {
   collegeId: string
   collegeSlug: string
   status: string
+  collegeAdmin?: boolean
 }
 
 export interface RegisterRequest {

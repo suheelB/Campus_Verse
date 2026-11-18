@@ -10,4 +10,5 @@ public class UserDto {
     private String collegeId;
     private String collegeSlug;
     private String status;
+    private boolean collegeAdmin;
 }

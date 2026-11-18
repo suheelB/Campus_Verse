@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Loader2, Plus, Search, Users } from 'lucide-react'
 import { clubsApi } from '@/services/clubsApi'
+import { apiErrorMessage } from '@/services/api'
 import type { Club } from '@/types/club'
 
 export function ClubsPage() {
@@ -21,7 +22,7 @@ export function ClubsPage() {
       setShowRequest(false)
       await Promise.all([queryClient.invalidateQueries({ queryKey: ['clubs'] }), queryClient.invalidateQueries({ queryKey: ['my-clubs'] })])
     },
-    onError: (error: any) => setNotice(error.response?.data?.message || 'Could not submit the club request. Try again.'),
+    onError: (error: unknown) => setNotice(apiErrorMessage(error, 'Could not submit the club request. Try again.')),
   })
 
   function submitRequest(event: FormEvent<HTMLFormElement>) {

@@ -1,9 +1,11 @@
 package com.campusverse.events.repository;
 
 import com.campusverse.events.domain.Event;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -16,6 +18,14 @@ import java.util.UUID;
 public interface EventRepository extends JpaRepository<Event, UUID> {
 
     Optional<Event> findByIdAndCollegeId(UUID id, UUID collegeId);
+
+    /**
+     * Serializes capacity changes for one event. Registration and cancellation both
+     * take this row lock before counting seats or promoting a waitlisted student.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Event e WHERE e.id = :id AND e.college.id = :collegeId")
+    Optional<Event> findByIdAndCollegeIdForUpdate(@Param("id") UUID id, @Param("collegeId") UUID collegeId);
 
     @Query("""
         SELECT e FROM Event e

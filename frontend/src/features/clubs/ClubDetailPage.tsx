@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CalendarDays, Loader2, Mail, Users } from 'lucide-react'
 import { clubsApi } from '@/services/clubsApi'
+import { apiErrorMessage } from '@/services/api'
 
 export function ClubDetailPage() {
   const { id = '' } = useParams()
@@ -17,7 +18,7 @@ export function ClubDetailPage() {
       setNotice(result.status === 'ACTIVE' ? 'You joined this club.' : 'Your membership application was submitted.')
       await client.invalidateQueries({ queryKey: ['my-clubs'] })
     },
-    onError: (error: any) => setNotice(error.response?.data?.message || 'Could not apply. Please try again.'),
+    onError: (error: unknown) => setNotice(apiErrorMessage(error, 'Could not apply. Please try again.')),
   })
   const leave = useMutation({
     mutationFn: () => clubsApi.leave(id),
@@ -25,7 +26,7 @@ export function ClubDetailPage() {
       setNotice('You left the club.')
       await client.invalidateQueries({ queryKey: ['my-clubs'] })
     },
-    onError: (error: any) => setNotice(error.response?.data?.message || 'Could not leave this club.'),
+    onError: (error: unknown) => setNotice(apiErrorMessage(error, 'Could not leave this club.')),
   })
 
   if (club.isLoading) return <div className="flex min-h-60 items-center justify-center text-gray-500"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading club…</div>

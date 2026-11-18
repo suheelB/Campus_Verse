@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Search, UserCheck, Loader2 } from 'lucide-react'
 import { eventsApi } from '@/services/eventsApi'
+import { apiErrorMessage } from '@/services/api'
 import type { EventRegistrationDto } from '@/types/event'
 
 interface Props {
@@ -39,8 +40,8 @@ export function EventCheckInModal({ eventId, eventTitle, onClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['event-registrations', eventId] })
       queryClient.invalidateQueries({ queryKey: ['event-attendance', eventId] })
     },
-    onError: (err: any) => {
-      setNotice(err.response?.data?.message || 'Check-in failed.')
+    onError: (err: unknown) => {
+      setNotice(apiErrorMessage(err, 'Check-in failed.'))
     },
   })
 

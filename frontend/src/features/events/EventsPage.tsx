@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { eventsApi } from '@/services/eventsApi'
 import { clubsApi } from '@/services/clubsApi'
+import { apiErrorMessage } from '@/services/api'
 import { useAuth } from '@/features/auth/AuthContext'
 import type { EventDto } from '@/types/event'
 
@@ -36,7 +37,7 @@ export function EventsPage() {
   const [createEndsAt, setCreateEndsAt] = useState('')
   const [createVenue, setCreateVenue] = useState('')
   const [createCapacity, setCreateCapacity] = useState('')
-  const [createPublishNow, setCreatePublishNow] = useState(true)
+  const [createPublishNow, setCreatePublishNow] = useState(false)
 
   const eventsQuery = useQuery({
     queryKey: ['events-list', search, upcomingOnly, selectedClub],
@@ -61,9 +62,12 @@ export function EventsPage() {
 
   const activeClubs = clubsList.data?.content || []
   const officerMemberships = (memberships.data || []).filter(
-    (m) => m.status === 'ACTIVE'
+    (m) => m.status === 'ACTIVE' && m.roleName?.toLowerCase().includes('officer')
   )
-  const canCreate = officerMemberships.length > 0 || user?.collegeId != null
+  const canCreate = officerMemberships.length > 0 || !!user?.collegeAdmin
+  const hostClubs = user?.collegeAdmin
+    ? activeClubs.map((club) => ({ id: club.id, name: club.name }))
+    : officerMemberships.map((membership) => ({ id: membership.clubId, name: membership.clubName }))
 
   const registerMutation = useMutation({
     mutationFn: (eventId: string) => eventsApi.register(eventId),
@@ -77,8 +81,8 @@ export function EventsPage() {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
     },
-    onError: (err: any) =>
-      setNotice(err.response?.data?.message || 'Could not register for event.'),
+    onError: (err: unknown) =>
+      setNotice(apiErrorMessage(err, 'Could not register for event.')),
   })
 
   const cancelRegMutation = useMutation({
@@ -87,20 +91,24 @@ export function EventsPage() {
       setNotice('Registration cancelled.')
       queryClient.invalidateQueries({ queryKey: ['events-list'] })
     },
-    onError: (err: any) =>
-      setNotice(err.response?.data?.message || 'Could not cancel registration.'),
+    onError: (err: unknown) =>
+      setNotice(apiErrorMessage(err, 'Could not cancel registration.')),
   })
 
   const createEventMutation = useMutation({
     mutationFn: eventsApi.create,
-    onSuccess: () => {
-      setNotice('Event created successfully!')
+    onSuccess: (created) => {
+      setNotice(
+        created.status === 'PUBLISHED'
+          ? 'Event published.'
+          : 'Event submitted for college administrator approval.'
+      )
       setShowCreate(false)
       resetForm()
       queryClient.invalidateQueries({ queryKey: ['events-list'] })
     },
-    onError: (err: any) =>
-      setNotice(err.response?.data?.message || 'Failed to create event.'),
+    onError: (err: unknown) =>
+      setNotice(apiErrorMessage(err, 'Failed to create event.')),
   })
 
   const resetForm = () => {
@@ -111,7 +119,7 @@ export function EventsPage() {
     setCreateEndsAt('')
     setCreateVenue('')
     setCreateCapacity('')
-    setCreatePublishNow(true)
+    setCreatePublishNow(false)
   }
 
   const handleCreateSubmit = (e: FormEvent) => {
@@ -346,7 +354,11 @@ export function EventsPage() {
                   </Link>
 
                   <div>
-                    {event.isUserRegistered ? (
+                    {event.userRegistrationStatus === 'ATTENDED' ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700">
+                        <UserCheck className="w-3.5 h-3.5" /> Checked in
+                      </span>
+                    ) : event.isUserRegistered ? (
                       <button
                         onClick={() => cancelRegMutation.mutate(event.id)}
                         disabled={cancelRegMutation.isPending}
@@ -391,15 +403,16 @@ export function EventsPage() {
 
             <form onSubmit={handleCreateSubmit} className="space-y-4 text-sm">
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Host Club *</label>
+                <label htmlFor="event-host-club" className="block font-medium text-slate-700 mb-1">Host Club *</label>
                 <select
+                  id="event-host-club"
                   required
                   value={createClubId}
                   onChange={(e) => setCreateClubId(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Select Club</option>
-                  {activeClubs.map((c) => (
+                  {hostClubs.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -408,8 +421,9 @@ export function EventsPage() {
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Event Title *</label>
+                <label htmlFor="event-title" className="block font-medium text-slate-700 mb-1">Event Title *</label>
                 <input
+                  id="event-title"
                   type="text"
                   required
                   value={createTitle}
@@ -420,8 +434,9 @@ export function EventsPage() {
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Description *</label>
+                <label htmlFor="event-description" className="block font-medium text-slate-700 mb-1">Description *</label>
                 <textarea
+                  id="event-description"
                   required
                   rows={3}
                   value={createDescription}
@@ -433,8 +448,9 @@ export function EventsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Starts At *</label>
+                  <label htmlFor="event-starts-at" className="block font-medium text-slate-700 mb-1">Starts At *</label>
                   <input
+                    id="event-starts-at"
                     type="datetime-local"
                     required
                     value={createStartsAt}
@@ -443,8 +459,9 @@ export function EventsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Ends At *</label>
+                  <label htmlFor="event-ends-at" className="block font-medium text-slate-700 mb-1">Ends At *</label>
                   <input
+                    id="event-ends-at"
                     type="datetime-local"
                     required
                     value={createEndsAt}
@@ -456,8 +473,9 @@ export function EventsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Venue / Location</label>
+                  <label htmlFor="event-venue" className="block font-medium text-slate-700 mb-1">Venue / Location</label>
                   <input
+                    id="event-venue"
                     type="text"
                     value={createVenue}
                     onChange={(e) => setCreateVenue(e.target.value)}
@@ -466,8 +484,9 @@ export function EventsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Capacity Limit</label>
+                  <label htmlFor="event-capacity" className="block font-medium text-slate-700 mb-1">Capacity Limit</label>
                   <input
+                    id="event-capacity"
                     type="number"
                     min="1"
                     value={createCapacity}
@@ -487,7 +506,7 @@ export function EventsPage() {
                   className="rounded text-indigo-600 focus:ring-indigo-500"
                 />
                 <label htmlFor="pubNow" className="text-slate-700 text-xs">
-                  Publish event immediately (otherwise submit as proposal)
+                  Publish immediately. College administrators can do this; officers still submit a proposal for approval.
                 </label>
               </div>
 

@@ -28,16 +28,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = async () => {
     const storedToken = localStorage.getItem('token')
-    const storedUser = localStorage.getItem('user')
 
-    if (storedToken && storedUser) {
+    if (storedToken) {
       try {
-        setToken(storedToken)
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`
-        setUser(JSON.parse(storedUser))
+        // Refresh from the server so role changes (for example a newly granted
+        // college administrator role) are reflected without a stale cache.
+        const response = await apiClient.get<ApiResponse<UserDto>>('/auth/me')
+        const currentUser = response.data?.data
+        if (!currentUser) throw new Error('Invalid current-user response')
+        setToken(storedToken)
+        setUser(currentUser)
+        localStorage.setItem('user', JSON.stringify(currentUser))
       } catch {
+        setToken(null)
+        setUser(null)
         localStorage.removeItem('token')
         localStorage.removeItem('user')
+        delete apiClient.defaults.headers.common['Authorization']
       }
     }
     setLoading(false)
@@ -49,7 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const response = await apiClient.post<ApiResponse<AuthResponse>>('/auth/login', { email, password })
-    const { token: newToken, user: newUser } = response.data.data
+    const payload = response.data?.data
+    if (!payload?.token || !payload?.user) {
+      throw new Error(response.data?.message || 'Login failed: Invalid server response')
+    }
+    const { token: newToken, user: newUser } = payload
     setToken(newToken)
     setUser(newUser)
     localStorage.setItem('token', newToken)
@@ -59,7 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: RegisterData) => {
     const response = await apiClient.post<ApiResponse<AuthResponse>>('/auth/register', data)
-    const { token: newToken, user: newUser } = response.data.data
+    const payload = response.data?.data
+    if (!payload?.token || !payload?.user) {
+      throw new Error(response.data?.message || 'Registration failed: Invalid server response')
+    }
+    const { token: newToken, user: newUser } = payload
     setToken(newToken)
     setUser(newUser)
     localStorage.setItem('token', newToken)

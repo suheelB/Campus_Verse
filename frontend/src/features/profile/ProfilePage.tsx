@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -65,6 +65,7 @@ export function ProfilePage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
+    reset,
   } = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -75,6 +76,17 @@ export function ProfilePage() {
       profileVisibility: 'PUBLIC',
     },
   })
+
+  useEffect(() => {
+    if (!profile) return
+    reset({
+      program: profile.program ?? '',
+      department: profile.department ?? '',
+      academicYear: profile.academicYear ?? '',
+      bio: profile.bio ?? '',
+      profileVisibility: profile.profileVisibility ?? 'PUBLIC',
+    })
+  }, [profile, reset])
 
   const onSubmit = (data: ProfileForm) => {
     setMessage(null)
@@ -161,7 +173,6 @@ export function ProfilePage() {
                   type="text"
                   className="input"
                   placeholder="e.g., Computer Science"
-                  defaultValue={profile.program ?? ''}
                 />
                 {errors.program && <p className="mt-1.5 text-sm text-red-600">{errors.program.message}</p>}
               </div>
@@ -176,7 +187,6 @@ export function ProfilePage() {
                   type="text"
                   className="input"
                   placeholder="e.g., Engineering"
-                  defaultValue={profile.department ?? ''}
                 />
                 {errors.department && <p className="mt-1.5 text-sm text-red-600">{errors.department.message}</p>}
               </div>
@@ -192,7 +202,6 @@ export function ProfilePage() {
                 type="text"
                 className="input"
                 placeholder="e.g., Junior, 2024-2025"
-                defaultValue={profile.academicYear ?? ''}
               />
               {errors.academicYear && <p className="mt-1.5 text-sm text-red-600">{errors.academicYear.message}</p>}
             </div>
@@ -214,7 +223,6 @@ export function ProfilePage() {
                 rows={4}
                 className="input resize-y min-h-[100px]"
                 placeholder="Tell others about yourself, your interests, and what you're looking for..."
-                defaultValue={profile.bio ?? ''}
               />
               {errors.bio && <p className="mt-1.5 text-sm text-red-600">{errors.bio.message}</p>}
             </div>

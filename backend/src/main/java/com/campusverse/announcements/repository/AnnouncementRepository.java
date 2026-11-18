@@ -58,4 +58,16 @@ public interface AnnouncementRepository extends JpaRepository<Announcement, UUID
             @Param("authorId") UUID authorId,
             @Param("collegeId") UUID collegeId
     );
+
+    @Query("""
+        SELECT a FROM Announcement a
+        WHERE a.status = 'PUBLISHED' AND a.expiresAt IS NOT NULL AND a.expiresAt <= :now
+    """)
+    List<Announcement> findExpired(@Param("now") Instant now);
+
+    @Query("""
+        SELECT a FROM Announcement a
+        WHERE a.status = 'SCHEDULED' AND a.publishAt <= :now
+    """)
+    List<Announcement> findDueForPublishing(@Param("now") Instant now);
 }

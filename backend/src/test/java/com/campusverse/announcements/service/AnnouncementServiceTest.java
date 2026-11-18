@@ -1,5 +1,6 @@
 package com.campusverse.announcements.service;
 
+import com.campusverse.audit.service.AuditService;
 import com.campusverse.announcements.domain.Announcement;
 import com.campusverse.announcements.domain.AnnouncementReceipt;
 import com.campusverse.announcements.dto.AnnouncementDto;
@@ -43,6 +44,7 @@ class AnnouncementServiceTest {
     @Mock CollegeRepository colleges;
     @Mock NotificationService notifications;
     @Mock JdbcTemplate jdbc;
+    @Mock AuditService audit;
 
     AnnouncementService service;
 
@@ -55,7 +57,7 @@ class AnnouncementServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AnnouncementService(announcements, receipts, clubs, memberships, users, colleges, notifications, jdbc);
+        service = new AnnouncementService(announcements, receipts, clubs, memberships, users, colleges, notifications, jdbc, audit);
         college = College.builder().id(collegeId).name("Demo College").build();
         author = User.builder().id(authorId).collegeId(collegeId).status(User.Status.ACTIVE).displayName("Alice Officer").build();
         club = Club.builder().id(clubId).name("Robotics Club").college(college).status(Club.Status.ACTIVE).build();

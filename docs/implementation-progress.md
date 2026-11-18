@@ -7,7 +7,7 @@
 **Status:** Baseline projects and Compose configuration exist. Frontend production build is verified. Backend Docker build is being re-run after Milestone 3 changes. PostgreSQL startup/migration verification is pending.
 
 ## Milestone 2 — Authentication and profiles
-**Status:** Authentication, JWT, student profile, and college association code exists. This milestone has not been re-tested end to end during the Milestone 3 work. Local accounts use BCrypt and a signed bearer token; logout currently removes the token client-side only.
+**Status:** Authentication, JWT, student profile, and college association code exists. This milestone has not been re-tested end to end during the Milestone 3 work. Local accounts use BCrypt and a signed bearer token; logout originally removed the token client-side only and now revokes it server-side (Milestone 7).
 
 ## Milestone 3 — Clubs and memberships
 **Status:** Completed and verified.
@@ -85,7 +85,60 @@
   - TypeScript compilation and Vite production build verified cleanly.
 
 ## Milestone 6 — Complete MVP integration
-**Status:** In progress / ready for integration verification.
+**Status:** Completed and verified.
+
+### Implemented in this work
+- Fixed club creation returning `500`: `clubs.social_links` and `club_roles.permissions` are PostgreSQL `jsonb`, now mapped with `@JdbcTypeCode(SqlTypes.JSON)` in `Club` and `ClubRole`.
+- Fixed `scripts/grant-college-admin.mjs` to pass SQL to `psql` over stdin (variables do not interpolate with `-c`) and added a college-administrator provisioning path.
+- Added the development origin `http://localhost:5174` to CORS and documented the split between the Docker build (`5173`) and the Vite dev server (`5174`).
+- Verified the admin path end to end: a student requests a club (`201`), an administrator approves it (`200`), and the creator receives an active "Club officer" membership with `MANAGE_MEMBERS`.
+- Rebuilt the Docker frontend so the administrator approval queue and management screens are present in the production build.
+- Added a Playwright MVP journey covering registration, profile completion, club request/approval, membership approval, announcements, event proposal/approval, registration, check-in, turnout reporting, and cross-college isolation checks.
+
+### Verification
+- `POST /api/v1/clubs` → `201`; `POST /api/v1/clubs/{id}/approve` → `200`.
+- PostgreSQL membership state after approval: `ACTIVE|ACTIVE|Club officer|["MANAGE_MEMBERS"]`.
+- Frontend `200` on `http://localhost:5173` and the `/api` proxy.
+- Full end-to-end run recorded under Milestone 7.
 
 ## Milestone 7 — Security, quality, and pilot readiness
-**Status:** Not started.
+**Status:** Completed and verified.
+
+### Security
+- Added migration `V7__audit_and_token_revocation.sql` with `audit_logs` and `revoked_tokens` plus college/actor/entity/action indexes.
+- Added the `com.campusverse.audit` package: `AuditLog`, repository, `AuditService`, and the administrator-only, college-scoped `GET /admin/audit-logs` endpoint (filter by `action`, `entityType`, `entityId`; page size capped at 100).
+- Instrumented sensitive flows with audit writes: registration, login, logout, club request/approve/reject, membership apply/approve/reject/leave/role assignment, announcement create/publish/expire/acknowledge, event create/update/publish/approve/reject/cancel, and attendance check-in.
+- Added `CollegeAdminGuard`, which re-reads `platform_role_assignments` on every call so a stale token cannot preserve removed privilege.
+- JWT access tokens now carry a `jti`. `POST /auth/logout` records the `jti` in `revoked_tokens`, and `JwtAuthenticationFilter` rejects revoked tokens on every request. Expired rows are purged hourly.
+- `JwtTokenProvider` refuses to start when `JWT_SECRET` is shorter than 32 bytes.
+- Added `AuthRateLimiter` + `AuthRateLimitFilter`: login and registration are limited per client address and endpoint (default 10 attempts per 60 seconds) and return `429` with `Retry-After`.
+- Added security headers in `SecurityConfig`: frame denial, `nosniff`, `Referrer-Policy: no-referrer`, a restrictive `Permissions-Policy`, and HSTS on HTTPS requests.
+
+### Quality and automation
+- Added `@EnableScheduling` and `MaintenanceJobs`: scheduled announcements are published when due, expired announcements become `EXPIRED`, and revoked tokens are purged.
+- Added unit tests: `AuditServiceTest`, `TokenRevocationServiceTest`, `AuthRateLimiterTest` (including the filter's `429` response), and `AnnouncementMaintenanceTest`.
+- Added a flat ESLint 9 configuration (`frontend/eslint.config.js`) with `typescript-eslint`, `react-hooks`, and `react-refresh`; replaced `any` in mutation handlers with `apiErrorMessage(error: unknown, fallback)`.
+- Added `.github/workflows/ci.yml`: backend `mvn -B verify` on Java 21, frontend lint/test/build on Node 20, and Docker image builds.
+- Updated the backend Dockerfile to Java 21 and switched the runtime to an unprivileged user.
+
+### Verification
+- `mvn test`: 36 tests run, 0 failures, 0 errors, 1 skipped (opt-in concurrency test); `BUILD SUCCESS`.
+- `npm run test`: 14/14 tests passed (3 files).
+- `npm run lint`: 0 errors, 1 warning (`react-refresh` fast-refresh advisory in `AuthContext.tsx`).
+- `npm run build`: `tsc -b && vite build` passed.
+- Flyway V1–V7 applied to PostgreSQL; `GET /api/v1/health` returned `200`.
+- Runtime probes on 2026-11-18: security headers present; ten invalid logins followed by `429` with `Retry-After: 59`; a token returned `401` after logout with a `revoked_tokens` row; a student received `403` from `/admin/audit-logs` while a college administrator saw only that college's entries and `size=500` was capped to `100`; a past-dated published announcement became `EXPIRED` with an `ANNOUNCEMENT_EXPIRE` audit row.
+- After rebuilding the backend image, `GET /api/v1/health` returned `200` and the same header/rate-limit/logout probes passed against the container.
+- Playwright MVP journey passed against the hardened backend (1/1, 31.4s): registration, profile, club request and approval, membership approval, announcement acknowledgement, event proposal and approval, registration, check-in, turnout report, and cross-college isolation checks.
+
+### Documentation
+- Added `docs/pilot-readiness.md` (deployment hardening, secrets, backup/restore, monitoring, incident response, retention).
+- Rewrote `docs/security-and-privacy.md` for the implemented controls.
+- Updated `README.md` (Java 21 Docker runtime, rate-limit and maintenance variables, endpoint list, testing commands).
+- Updated `docs/test-plan.md` and `docs/milestone-7-checklist.md`.
+
+### Known limitations
+- The auth rate limiter is in-memory and per instance; a multi-instance pilot should move counters to Redis.
+- Audit writes share the action's transaction so the trail and the action stay consistent. Failed inserts are logged as `Failed to persist audit entry`; in transactional service paths the action then fails, while non-transactional paths such as logout still return normally.
+- The Testcontainers concurrency test cannot attach to the local Docker 29 socket; it remains opt-in against a disposable database.
+

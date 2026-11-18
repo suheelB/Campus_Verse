@@ -1,5 +1,6 @@
 package com.campusverse.clubs.service;
 
+import com.campusverse.audit.service.AuditService;
 import com.campusverse.clubs.domain.Club;
 import com.campusverse.clubs.domain.ClubCategory;
 import com.campusverse.clubs.domain.ClubRole;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -40,6 +42,7 @@ public class ClubService {
     private final CollegeRepository colleges;
     private final UserRepository users;
     private final JdbcTemplate jdbc;
+    private final AuditService audit;
 
     @Transactional(readOnly = true)
     public Page<ClubDto> directory(UUID collegeId, UUID viewerId, String search, String categorySlug, Pageable pageable) {
@@ -75,7 +78,10 @@ public class ClubService {
                 .visibility(Club.Visibility.PUBLIC)
                 .requireApproval(true)
                 .build();
-        return clubDto(clubs.save(club));
+        Club saved = clubs.save(club);
+        audit.record(creator.getCollegeId(), userId, "CLUB_REQUEST", "CLUB", saved.getId(),
+                Map.of("name", saved.getName(), "slug", saved.getSlug()));
+        return clubDto(saved);
     }
 
     @Transactional(readOnly = true)
@@ -116,6 +122,8 @@ public class ClubService {
             club.setApprovedBy(actor);
             club.setRejectionReason(reason == null || reason.isBlank() ? "Request rejected" : reason.trim());
         }
+        audit.record(collegeId, actorId, approve ? "CLUB_APPROVE" : "CLUB_REJECT", "CLUB", club.getId(),
+                Map.of("name", club.getName(), "status", club.getStatus().name()));
         return clubDto(club);
     }
 
@@ -136,6 +144,8 @@ public class ClubService {
             existing.setRejectionReason(null);
             existing.setLeftAt(null);
             existing.setRole(club.getRequireApproval() ? null : roles.findByClubAndName(club, "MEMBER").orElse(null));
+            audit.record(collegeId, userId, "MEMBERSHIP_APPLY", "MEMBERSHIP", existing.getId(),
+                    Map.of("clubId", club.getId().toString(), "status", existing.getStatus().name()));
             return membershipDto(existing);
         }
         Membership membership = Membership.builder().club(club).user(applicant)
@@ -144,7 +154,10 @@ public class ClubService {
         if (membership.getStatus() == Membership.Status.ACTIVE) {
             membership.setRole(roles.findByClubAndName(club, "MEMBER").orElse(null));
         }
-        return membershipDto(memberships.save(membership));
+        Membership saved = memberships.save(membership);
+        audit.record(collegeId, userId, "MEMBERSHIP_APPLY", "MEMBERSHIP", saved.getId(),
+                Map.of("clubId", club.getId().toString(), "status", saved.getStatus().name()));
+        return membershipDto(saved);
     }
 
     public MembershipDto decideMembership(UUID membershipId, UUID actorId, UUID collegeId, boolean approve, String reason) {
@@ -164,6 +177,9 @@ public class ClubService {
             membership.setStatus(Membership.Status.REJECTED);
             membership.setRejectionReason(reason == null || reason.isBlank() ? "Application rejected" : reason.trim());
         }
+        audit.record(collegeId, actorId, approve ? "MEMBERSHIP_APPROVE" : "MEMBERSHIP_REJECT", "MEMBERSHIP",
+                membership.getId(),
+                Map.of("clubId", club.getId().toString(), "memberId", membership.getUser().getId().toString()));
         return membershipDto(membership);
     }
 
@@ -176,6 +192,8 @@ public class ClubService {
         if (membership.getStatus() != Membership.Status.ACTIVE) throw new IllegalStateException("Only active members can leave");
         membership.setStatus(Membership.Status.LEFT);
         membership.setLeftAt(Instant.now());
+        audit.record(collegeId, userId, "MEMBERSHIP_LEAVE", "MEMBERSHIP", membership.getId(),
+                Map.of("clubId", club.getId().toString()));
     }
 
     @Transactional(readOnly = true)
@@ -201,6 +219,8 @@ public class ClubService {
         ClubRole role = roles.findById(roleId).orElseThrow(() -> new EntityNotFoundException("Role not found"));
         if (!role.getClub().getId().equals(club.getId())) throw new AccessDeniedException("Role belongs to another club");
         membership.setRole(role);
+        audit.record(collegeId, actorId, "MEMBERSHIP_ROLE_ASSIGN", "MEMBERSHIP", membership.getId(),
+                Map.of("clubId", club.getId().toString(), "roleId", role.getId().toString()));
         return membershipDto(membership);
     }
 

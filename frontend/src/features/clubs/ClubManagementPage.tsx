@@ -1,12 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { Loader2, Users } from 'lucide-react'
 import { clubsApi } from '@/services/clubsApi'
+import { eventsApi } from '@/services/eventsApi'
+import { useAuth } from '@/features/auth/AuthContext'
 import type { Membership } from '@/types/club'
 
 export function ClubManagementPage() {
   const client = useQueryClient()
+  const { user } = useAuth()
   const mine = useQuery({ queryKey: ['my-clubs'], queryFn: clubsApi.myMemberships })
-  const adminRequests = useQuery({ queryKey: ['club-approval-requests'], queryFn: clubsApi.pendingApprovals, retry: false })
+  const adminRequests = useQuery({
+    queryKey: ['club-approval-requests'],
+    queryFn: clubsApi.pendingApprovals,
+    retry: false,
+    refetchOnMount: 'always',
+  })
+  const pendingEvents = useQuery({
+    queryKey: ['pending-events'],
+    queryFn: () => eventsApi.list({ status: 'PENDING_APPROVAL', size: 20 }),
+    retry: false,
+    enabled: !!user?.collegeAdmin,
+    refetchOnMount: 'always',
+  })
+  const decideEvent = useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
+      approve ? eventsApi.approve(id) : eventsApi.reject(id, 'Not approved by the college administrator'),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['pending-events'] }),
+        client.invalidateQueries({ queryKey: ['events-list'] }),
+      ])
+    },
+  })
   const decideClub = useMutation({
     mutationFn: ({ id, approve, reason }: { id: string; approve: boolean; reason?: string }) => approve ? clubsApi.approve(id) : clubsApi.reject(id, reason || 'Not approved by the college administrator'),
     onSuccess: async () => { await Promise.all([client.invalidateQueries({ queryKey: ['club-approval-requests'] }), client.invalidateQueries({ queryKey: ['my-club-requests'] }), client.invalidateQueries({ queryKey: ['clubs'] })]) },
@@ -33,6 +59,25 @@ export function ClubManagementPage() {
     </section>
 
     <section>
+      <div className="mb-4"><h2 className="text-xl font-semibold">Event proposals</h2><p className="mt-1 text-sm text-gray-600">Officer proposals stay unpublished until a college administrator approves them.</p></div>
+      {adminRequests.isError && <p className="text-sm text-gray-500">Event approval is limited to college administrators.</p>}
+      {pendingEvents.isLoading && <p className="text-sm text-gray-500">Loading event proposals…</p>}
+      {pendingEvents.data && (pendingEvents.data.content.length === 0 ? <div className="card p-6 text-sm text-gray-600">No events are waiting for approval.</div> : <div className="grid gap-4 md:grid-cols-2">
+        {pendingEvents.data.content.map((event) => <article key={event.id} className="card p-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary-700">{event.clubName}</p>
+          <h3 className="mt-2 text-lg font-semibold">{event.title}</h3>
+          <p className="mt-2 text-sm leading-6 text-gray-600">{event.description}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button className="btn-primary" disabled={decideEvent.isPending} onClick={() => decideEvent.mutate({ id: event.id, approve: true })}>Approve event</button>
+            <button className="btn-outline" disabled={decideEvent.isPending} onClick={() => decideEvent.mutate({ id: event.id, approve: false })}>Reject</button>
+            <Link className="text-sm font-semibold text-primary-700 hover:underline" to={`/events/${event.id}`}>Review details</Link>
+          </div>
+        </article>)}
+      </div>)}
+      {decideEvent.isError && <p role="alert" className="mt-3 text-sm text-red-700">The event decision could not be saved.</p>}
+    </section>
+
+    <section>
       <h2 className="mb-4 text-xl font-semibold">Officer dashboards</h2>
       {officerClubs.length === 0 ? <div className="card flex items-center gap-4 p-6 text-sm text-gray-600"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100"><Users className="h-5 w-5" /></span>You don’t have officer access to a club yet. Officers can review applications and manage member roles here.</div> : <div className="space-y-6">{officerClubs.map((membership) => <OfficerPanel key={membership.clubId} clubId={membership.clubId} clubName={membership.clubName} />)}</div>}
     </section>
@@ -41,8 +86,8 @@ export function ClubManagementPage() {
 
 function OfficerPanel({ clubId, clubName }: { clubId: string; clubName: string }) {
   const client = useQueryClient()
-  const requests = useQuery({ queryKey: ['membership-requests', clubId], queryFn: () => clubsApi.membershipRequests(clubId), retry: false })
-  const members = useQuery({ queryKey: ['club-members', clubId], queryFn: () => clubsApi.members(clubId), retry: false })
+  const requests = useQuery({ queryKey: ['membership-requests', clubId], queryFn: () => clubsApi.membershipRequests(clubId), retry: false, refetchOnMount: 'always' })
+  const members = useQuery({ queryKey: ['club-members', clubId], queryFn: () => clubsApi.members(clubId), retry: false, refetchOnMount: 'always' })
   const roles = useQuery({ queryKey: ['club-roles', clubId], queryFn: () => clubsApi.roles(clubId), retry: false })
   const decide = useMutation({
     mutationFn: ({ id, approve }: { id: string; approve: boolean }) => clubsApi.decideMembership(id, approve),

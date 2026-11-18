@@ -1,5 +1,6 @@
 package com.campusverse.events.service;
 
+import com.campusverse.audit.service.AuditService;
 import com.campusverse.clubs.domain.Club;
 import com.campusverse.clubs.domain.ClubRole;
 import com.campusverse.clubs.domain.Membership;
@@ -12,6 +13,8 @@ import com.campusverse.events.domain.EventAttendance;
 import com.campusverse.events.domain.EventRegistration;
 import com.campusverse.events.dto.CheckInRequest;
 import com.campusverse.events.dto.EventAttendanceDto;
+import com.campusverse.events.dto.EventCreateRequest;
+import com.campusverse.events.dto.EventDto;
 import com.campusverse.events.dto.EventRegistrationDto;
 import com.campusverse.events.repository.EventAttendanceRepository;
 import com.campusverse.events.repository.EventRegistrationRepository;
@@ -49,6 +52,7 @@ class EventServiceTest {
     @Mock CollegeRepository collegeRepository;
     @Mock NotificationService notificationService;
     @Mock JdbcTemplate jdbc;
+    @Mock AuditService audit;
 
     EventService service;
 
@@ -75,7 +79,8 @@ class EventServiceTest {
                 userRepository,
                 collegeRepository,
                 notificationService,
-                jdbc
+                jdbc,
+                audit
         );
 
         college = College.builder().id(collegeId).name("Campus College").build();
@@ -99,10 +104,10 @@ class EventServiceTest {
 
     @Test
     void studentCanRegisterForPublishedEvent() {
-        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(eventRepository.findByIdAndCollegeIdForUpdate(eventId, collegeId)).thenReturn(Optional.of(event));
         when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
         when(registrationRepository.findByEventIdAndUserId(eventId, studentId)).thenReturn(Optional.empty());
-        when(registrationRepository.countByEventIdAndStatus(eventId, EventRegistration.Status.REGISTERED)).thenReturn(10L);
+        when(registrationRepository.countByEventIdAndStatusIn(eq(eventId), anyCollection())).thenReturn(10L);
         when(registrationRepository.save(any(EventRegistration.class))).thenAnswer(inv -> {
             EventRegistration r = inv.getArgument(0);
             r.setId(UUID.randomUUID());
@@ -120,7 +125,7 @@ class EventServiceTest {
     @Test
     void registrationRejectedWhenEventNotPublished() {
         event.setStatus(Event.Status.CANCELLED);
-        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(eventRepository.findByIdAndCollegeIdForUpdate(eventId, collegeId)).thenReturn(Optional.of(event));
         when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
@@ -131,7 +136,7 @@ class EventServiceTest {
     @Test
     void registrationRejectedAfterDeadline() {
         event.setRegistrationClosesAt(Instant.now().minus(1, ChronoUnit.HOURS));
-        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(eventRepository.findByIdAndCollegeIdForUpdate(eventId, collegeId)).thenReturn(Optional.of(event));
         when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
@@ -147,7 +152,7 @@ class EventServiceTest {
                 .status(EventRegistration.Status.REGISTERED)
                 .build();
 
-        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(eventRepository.findByIdAndCollegeIdForUpdate(eventId, collegeId)).thenReturn(Optional.of(event));
         when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
         when(registrationRepository.findByEventIdAndUserId(eventId, studentId)).thenReturn(Optional.of(existing));
 
@@ -159,10 +164,10 @@ class EventServiceTest {
     @Test
     void capacityFullAddsToWaitlist() {
         event.setCapacity(2);
-        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(eventRepository.findByIdAndCollegeIdForUpdate(eventId, collegeId)).thenReturn(Optional.of(event));
         when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
         when(registrationRepository.findByEventIdAndUserId(eventId, studentId)).thenReturn(Optional.empty());
-        when(registrationRepository.countByEventIdAndStatus(eventId, EventRegistration.Status.REGISTERED)).thenReturn(2L);
+        when(registrationRepository.countByEventIdAndStatusIn(eq(eventId), anyCollection())).thenReturn(2L);
         when(registrationRepository.findMaxWaitlistPositionByEventId(eventId)).thenReturn(0);
         when(registrationRepository.save(any(EventRegistration.class))).thenAnswer(inv -> {
             EventRegistration r = inv.getArgument(0);
@@ -195,7 +200,7 @@ class EventServiceTest {
                 .waitlistPosition(1)
                 .build();
 
-        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(eventRepository.findByIdAndCollegeIdForUpdate(eventId, collegeId)).thenReturn(Optional.of(event));
         when(registrationRepository.findByEventIdAndUserId(eventId, studentId)).thenReturn(Optional.of(studentReg));
         when(registrationRepository.findFirstByEventIdAndStatusOrderByWaitlistPositionAscRegisteredAtAsc(eventId, EventRegistration.Status.WAITLISTED))
                 .thenReturn(Optional.of(waitlistedReg));
@@ -244,5 +249,87 @@ class EventServiceTest {
         assertNotNull(result);
         assertEquals(studentId, result.userId());
         verify(attendanceRepository).save(any(EventAttendance.class));
+    }
+
+    @Test
+    void officerPublishNowStillRequiresAdministratorApproval() {
+        ClubRole officerRole = ClubRole.builder().name("OFFICER").permissions("[\"MANAGE_MEMBERS\"]").build();
+        Membership membership = Membership.builder().club(club).user(officer).status(Membership.Status.ACTIVE).role(officerRole).build();
+        when(userRepository.findById(officerId)).thenReturn(Optional.of(officer));
+        when(collegeRepository.findById(collegeId)).thenReturn(Optional.of(college));
+        when(clubRepository.findById(clubId)).thenReturn(Optional.of(club));
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(officerId), eq(collegeId))).thenReturn(false);
+        when(membershipRepository.findByClubAndUser(eq(club), eq(officer))).thenReturn(Optional.of(membership));
+        when(eventRepository.save(any(Event.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        EventCreateRequest request = new EventCreateRequest(
+                clubId, "Welcome night", "Meet the club and plan the semester.",
+                Instant.now().plus(2, ChronoUnit.DAYS), Instant.now().plus(3, ChronoUnit.DAYS),
+                "Student center", 40, null, null, true);
+
+        EventDto created = service.createEvent(request, officerId, collegeId);
+
+        assertEquals(Event.Status.PENDING_APPROVAL, created.status());
+    }
+
+    @Test
+    void officerCannotPublishEventDirectly() {
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(officerId), eq(collegeId))).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> service.publishEvent(eventId, officerId, collegeId));
+        verify(eventRepository, never()).save(any());
+    }
+
+    @Test
+    void studentCannotViewUnpublishedProposalById() {
+        event.setStatus(Event.Status.PENDING_APPROVAL);
+        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(studentId), eq(collegeId))).thenReturn(false);
+        when(userRepository.findById(studentId)).thenReturn(Optional.of(student));
+        when(membershipRepository.findByClubAndUser(club, student)).thenReturn(Optional.empty());
+
+        assertThrows(jakarta.persistence.EntityNotFoundException.class,
+                () -> service.getEvent(eventId, collegeId, studentId));
+    }
+
+    @Test
+    void eventOfficerCanViewOwnUnpublishedProposal() {
+        event.setStatus(Event.Status.PENDING_APPROVAL);
+        ClubRole officerRole = ClubRole.builder().name("OFFICER").permissions("[\"MANAGE_MEMBERS\"]").build();
+        Membership membership = Membership.builder().club(club).user(officer)
+                .status(Membership.Status.ACTIVE).role(officerRole).build();
+
+        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(officerId), eq(collegeId))).thenReturn(false);
+        when(userRepository.findById(officerId)).thenReturn(Optional.of(officer));
+        when(membershipRepository.findByClubAndUser(club, officer)).thenReturn(Optional.of(membership));
+        when(registrationRepository.countByEventIdAndStatusIn(eq(eventId), anyCollection())).thenReturn(0L);
+        when(registrationRepository.countByEventIdAndStatus(eventId, EventRegistration.Status.WAITLISTED)).thenReturn(0L);
+
+        EventDto result = service.getEvent(eventId, collegeId, officerId);
+
+        assertEquals(Event.Status.PENDING_APPROVAL, result.status());
+    }
+
+    @Test
+    void attendanceReportCountsCheckedInStudentsAsRegistered() {
+        ClubRole officerRole = ClubRole.builder().name("OFFICER").permissions("[\"MANAGE_MEMBERS\"]").build();
+        Membership membership = Membership.builder().club(club).user(officer)
+                .status(Membership.Status.ACTIVE).role(officerRole).build();
+
+        when(eventRepository.findByIdAndCollegeId(eventId, collegeId)).thenReturn(Optional.of(event));
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(officerId), eq(collegeId))).thenReturn(false);
+        when(userRepository.findById(officerId)).thenReturn(Optional.of(officer));
+        when(membershipRepository.findByClubAndUser(club, officer)).thenReturn(Optional.of(membership));
+        when(registrationRepository.countByEventIdAndStatusIn(eq(eventId), anyCollection())).thenReturn(5L);
+        when(registrationRepository.countByEventIdAndStatus(eventId, EventRegistration.Status.WAITLISTED)).thenReturn(2L);
+        when(attendanceRepository.countByEventId(eventId)).thenReturn(3L);
+
+        var report = service.getAttendanceReport(eventId, officerId, collegeId);
+
+        assertEquals(5, report.totalRegistered());
+        assertEquals(3, report.totalAttended());
+        assertEquals(2, report.totalWaitlisted());
+        assertEquals(60.0, report.attendanceRatePercent());
     }
 }

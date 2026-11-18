@@ -14,6 +14,7 @@ import {
   UserCheck,
 } from 'lucide-react'
 import { eventsApi } from '@/services/eventsApi'
+import { apiErrorMessage } from '@/services/api'
 import { clubsApi } from '@/services/clubsApi'
 import { useAuth } from '@/features/auth/AuthContext'
 import { EventCheckInModal } from './EventCheckInModal'
@@ -33,13 +34,6 @@ export function EventDetailPage() {
     enabled: !!id,
   })
 
-  const registrationsQuery = useQuery({
-    queryKey: ['event-registrations', id],
-    queryFn: () => eventsApi.registrations(id!),
-    enabled: !!id,
-    retry: false, // will fail if not officer/admin, which is expected
-  })
-
   const reportQuery = useQuery({
     queryKey: ['event-report', id],
     queryFn: () => eventsApi.report(id!),
@@ -52,13 +46,19 @@ export function EventDetailPage() {
   })
 
   const event = eventQuery.data
-  const isOfficerOrAdmin =
-    user?.collegeId != null &&
-    (memberships.data || []).some(
-      (m) =>
-        m.clubId === event?.primaryClubId &&
-        m.status === 'ACTIVE'
-    )
+  const isClubOfficer = (memberships.data || []).some(
+    (m) =>
+      m.clubId === event?.primaryClubId &&
+      m.status === 'ACTIVE' &&
+      m.roleName?.toLowerCase().includes('officer')
+  )
+  const canOrganize = !!user?.collegeAdmin || isClubOfficer
+  const registrationsQuery = useQuery({
+    queryKey: ['event-registrations', id],
+    queryFn: () => eventsApi.registrations(id!),
+    enabled: !!id && canOrganize,
+    retry: false,
+  })
 
   const registerMutation = useMutation({
     mutationFn: () => eventsApi.register(id!),
@@ -70,8 +70,8 @@ export function EventDetailPage() {
       )
       queryClient.invalidateQueries({ queryKey: ['event-detail', id] })
     },
-    onError: (err: any) =>
-      setNotice(err.response?.data?.message || 'Could not register for event.'),
+    onError: (err: unknown) =>
+      setNotice(apiErrorMessage(err, 'Could not register for event.')),
   })
 
   const cancelRegMutation = useMutation({
@@ -80,16 +80,19 @@ export function EventDetailPage() {
       setNotice('Registration cancelled.')
       queryClient.invalidateQueries({ queryKey: ['event-detail', id] })
     },
-    onError: (err: any) =>
-      setNotice(err.response?.data?.message || 'Could not cancel registration.'),
+    onError: (err: unknown) =>
+      setNotice(apiErrorMessage(err, 'Could not cancel registration.')),
   })
 
-  const publishMutation = useMutation({
-    mutationFn: () => eventsApi.publish(id!),
+  const approveMutation = useMutation({
+    mutationFn: () => eventsApi.approve(id!),
     onSuccess: () => {
-      setNotice('Event published.')
+      setNotice('Event approved and published.')
       queryClient.invalidateQueries({ queryKey: ['event-detail', id] })
+      queryClient.invalidateQueries({ queryKey: ['pending-events'] })
     },
+    onError: (err: unknown) =>
+      setNotice(apiErrorMessage(err, 'Could not approve this event.')),
   })
 
   const cancelEventMutation = useMutation({
@@ -97,7 +100,10 @@ export function EventDetailPage() {
     onSuccess: () => {
       setNotice('Event cancelled.')
       queryClient.invalidateQueries({ queryKey: ['event-detail', id] })
+      queryClient.invalidateQueries({ queryKey: ['events-list'] })
     },
+    onError: (err: unknown) =>
+      setNotice(apiErrorMessage(err, 'Could not cancel this event.')),
   })
 
   if (eventQuery.isLoading) {
@@ -252,7 +258,7 @@ export function EventDetailPage() {
           </div>
 
           {/* Organizer Admin / Officer Tools */}
-          {(isOfficerOrAdmin || registrationsQuery.isSuccess) && (
+          {canOrganize && (
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -278,14 +284,17 @@ export function EventDetailPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {event.status !== 'PUBLISHED' && (
+                {user?.collegeAdmin && event.status === 'PENDING_APPROVAL' && (
                   <button
-                    onClick={() => publishMutation.mutate()}
-                    disabled={publishMutation.isPending}
+                    onClick={() => approveMutation.mutate()}
+                    disabled={approveMutation.isPending}
                     className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg"
                   >
-                    Publish Event
+                    Approve event
                   </button>
+                )}
+                {!user?.collegeAdmin && event.status === 'PENDING_APPROVAL' && (
+                  <p className="text-xs text-amber-800">Waiting for a college administrator to approve this event.</p>
                 )}
                 {event.status !== 'CANCELLED' && (
                   <button

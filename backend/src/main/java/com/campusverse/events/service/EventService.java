@@ -1,5 +1,6 @@
 package com.campusverse.events.service;
 
+import com.campusverse.audit.service.AuditService;
 import com.campusverse.clubs.domain.Club;
 import com.campusverse.clubs.domain.Membership;
 import com.campusverse.clubs.repository.ClubRepository;
@@ -42,11 +43,22 @@ public class EventService {
     private final CollegeRepository collegeRepository;
     private final NotificationService notificationService;
     private final JdbcTemplate jdbc;
+    private final AuditService audit;
 
     @Transactional(readOnly = true)
     public Page<EventDto> listEvents(UUID collegeId, UUID clubId, Event.Status status, String search, Boolean upcoming, UUID userId, Pageable pageable) {
         Instant now = Instant.now();
         Event.Status queryStatus = status != null ? status : Event.Status.PUBLISHED;
+        if (queryStatus != Event.Status.PUBLISHED) {
+            if (!isCollegeAdmin(userId, collegeId)) {
+                if (clubId == null) {
+                    throw new AccessDeniedException("Only college administrators can review unpublished events");
+                }
+                Club scoped = clubRepository.findById(clubId)
+                        .orElseThrow(() -> new EntityNotFoundException("Club not found"));
+                requireOfficerOrAdmin(scoped, userId, collegeId);
+            }
+        }
         boolean hasSearch = (search != null && !search.trim().isEmpty());
         String cleanSearch = hasSearch ? search.trim() : null;
 
@@ -71,6 +83,10 @@ public class EventService {
     public EventDto getEvent(UUID eventId, UUID collegeId, UUID userId) {
         Event event = eventRepository.findByIdAndCollegeId(eventId, collegeId)
                 .orElseThrow(() -> new EntityNotFoundException("Event not found"));
+        if (event.getStatus() != Event.Status.PUBLISHED && !canManageEvent(event, userId, collegeId)) {
+            // Do not reveal that an unpublished proposal exists.
+            throw new EntityNotFoundException("Event not found");
+        }
         return toDto(event, userId);
     }
 
@@ -85,11 +101,10 @@ public class EventService {
         }
 
         requireOfficerOrAdmin(club, actorId, collegeId);
+        validateSchedule(request.startsAt(), request.endsAt(), request.registrationOpensAt(), request.registrationClosesAt());
 
         Event.Status status = Event.Status.PENDING_APPROVAL;
         if (request.publishNow() && isCollegeAdmin(actorId, collegeId)) {
-            status = Event.Status.PUBLISHED;
-        } else if (request.publishNow()) {
             status = Event.Status.PUBLISHED;
         }
 
@@ -109,6 +124,8 @@ public class EventService {
                 .build();
 
         event = eventRepository.save(event);
+        audit.record(collegeId, actorId, "EVENT_CREATE", "EVENT", event.getId(),
+                Map.of("title", event.getTitle(), "status", event.getStatus().name()));
         return toDto(event, actorId);
     }
 
@@ -116,6 +133,11 @@ public class EventService {
         Event event = eventRepository.findByIdAndCollegeId(eventId, collegeId)
                 .orElseThrow(() -> new EntityNotFoundException("Event not found"));
         requireOfficerOrAdmin(event.getPrimaryClub(), actorId, collegeId);
+        if (event.getStatus() == Event.Status.CANCELLED || event.getStatus() == Event.Status.COMPLETED
+                || event.getStatus() == Event.Status.ARCHIVED) {
+            throw new IllegalStateException("This event can no longer be edited");
+        }
+        validateSchedule(request.startsAt(), request.endsAt(), request.registrationOpensAt(), request.registrationClosesAt());
 
         event.setTitle(request.title().trim());
         event.setDescription(request.description().trim());
@@ -126,16 +148,27 @@ public class EventService {
         event.setRegistrationOpensAt(request.registrationOpensAt());
         event.setRegistrationClosesAt(request.registrationClosesAt());
 
-        return toDto(eventRepository.save(event), actorId);
+        event = eventRepository.save(event);
+        audit.record(collegeId, actorId, "EVENT_UPDATE", "EVENT", event.getId(),
+                Map.of("title", event.getTitle()));
+        return toDto(event, actorId);
     }
 
     public EventDto publishEvent(UUID eventId, UUID actorId, UUID collegeId) {
+        if (!isCollegeAdmin(actorId, collegeId)) {
+            throw new AccessDeniedException("Only college administrators can publish events");
+        }
         Event event = eventRepository.findByIdAndCollegeId(eventId, collegeId)
                 .orElseThrow(() -> new EntityNotFoundException("Event not found"));
-        requireOfficerOrAdmin(event.getPrimaryClub(), actorId, collegeId);
-
+        if (event.getStatus() == Event.Status.CANCELLED || event.getStatus() == Event.Status.REJECTED
+                || event.getStatus() == Event.Status.COMPLETED || event.getStatus() == Event.Status.ARCHIVED) {
+            throw new IllegalStateException("This event cannot be published from its current status");
+        }
         event.setStatus(Event.Status.PUBLISHED);
-        return toDto(eventRepository.save(event), actorId);
+        event = eventRepository.save(event);
+        audit.record(collegeId, actorId, "EVENT_PUBLISH", "EVENT", event.getId(),
+                Map.of("title", event.getTitle()));
+        return toDto(event, actorId);
     }
 
     public EventDto approveEvent(UUID eventId, UUID actorId, UUID collegeId) {
@@ -144,6 +177,9 @@ public class EventService {
         }
         Event event = eventRepository.findByIdAndCollegeId(eventId, collegeId)
                 .orElseThrow(() -> new EntityNotFoundException("Event not found"));
+        if (event.getStatus() != Event.Status.PENDING_APPROVAL) {
+            throw new IllegalStateException("Only events awaiting approval can be approved");
+        }
         User admin = activeUser(actorId, collegeId);
 
         event.setStatus(Event.Status.PUBLISHED);
@@ -160,7 +196,10 @@ public class EventService {
                 "event_approved_" + event.getId()
         );
 
-        return toDto(eventRepository.save(event), actorId);
+        event = eventRepository.save(event);
+        audit.record(collegeId, actorId, "EVENT_APPROVE", "EVENT", event.getId(),
+                Map.of("title", event.getTitle()));
+        return toDto(event, actorId);
     }
 
     public EventDto rejectEvent(UUID eventId, String reason, UUID actorId, UUID collegeId) {
@@ -169,6 +208,9 @@ public class EventService {
         }
         Event event = eventRepository.findByIdAndCollegeId(eventId, collegeId)
                 .orElseThrow(() -> new EntityNotFoundException("Event not found"));
+        if (event.getStatus() != Event.Status.PENDING_APPROVAL) {
+            throw new IllegalStateException("Only events awaiting approval can be rejected");
+        }
 
         event.setStatus(Event.Status.REJECTED);
 
@@ -182,7 +224,10 @@ public class EventService {
                 "event_rejected_" + event.getId()
         );
 
-        return toDto(eventRepository.save(event), actorId);
+        event = eventRepository.save(event);
+        audit.record(collegeId, actorId, "EVENT_REJECT", "EVENT", event.getId(),
+                Map.of("title", event.getTitle(), "reason", reason == null ? "" : reason));
+        return toDto(event, actorId);
     }
 
     public EventDto cancelEvent(UUID eventId, UUID actorId, UUID collegeId) {
@@ -210,11 +255,14 @@ public class EventService {
             }
         }
 
+        audit.record(collegeId, actorId, "EVENT_CANCEL", "EVENT", event.getId(),
+                Map.of("title", event.getTitle()));
         return toDto(event, actorId);
     }
 
     public EventRegistrationDto registerForEvent(UUID eventId, UUID userId, UUID collegeId) {
-        Event event = eventRepository.findByIdAndCollegeId(eventId, collegeId)
+        // The pessimistic row lock serializes the capacity check and seat assignment.
+        Event event = eventRepository.findByIdAndCollegeIdForUpdate(eventId, collegeId)
                 .orElseThrow(() -> new EntityNotFoundException("Event not found"));
         User user = activeUser(userId, collegeId);
 
@@ -238,7 +286,7 @@ public class EventService {
             }
         }
 
-        long registeredCount = registrationRepository.countByEventIdAndStatus(eventId, EventRegistration.Status.REGISTERED);
+        long registeredCount = occupiedSeatCount(eventId);
         boolean isFull = event.getCapacity() != null && registeredCount >= event.getCapacity();
 
         EventRegistration reg;
@@ -283,7 +331,7 @@ public class EventService {
     }
 
     public void cancelRegistration(UUID eventId, UUID userId, UUID collegeId) {
-        Event event = eventRepository.findByIdAndCollegeId(eventId, collegeId)
+        Event event = eventRepository.findByIdAndCollegeIdForUpdate(eventId, collegeId)
                 .orElseThrow(() -> new EntityNotFoundException("Event not found"));
         EventRegistration reg = registrationRepository.findByEventIdAndUserId(eventId, userId)
                 .orElseThrow(() -> new EntityNotFoundException("Registration not found"));
@@ -402,6 +450,9 @@ public class EventService {
                 "attendance_" + event.getId() + "_" + attendee.getId()
         );
 
+        audit.record(collegeId, actorId, "EVENT_CHECK_IN", "EVENT_ATTENDANCE", attendance.getId(),
+                Map.of("eventId", event.getId().toString(), "attendeeId", attendee.getId().toString()));
+
         return toAttendanceDto(attendance);
     }
 
@@ -422,11 +473,13 @@ public class EventService {
                 .orElseThrow(() -> new EntityNotFoundException("Event not found"));
         requireOfficerOrAdmin(event.getPrimaryClub(), actorId, collegeId);
 
-        long registered = registrationRepository.countByEventIdAndStatus(eventId, EventRegistration.Status.REGISTERED);
-        long waitlisted = registrationRepository.countByEventIdAndStatus(eventId, EventRegistration.Status.WAITLISTED);
         long attended = attendanceRepository.countByEventId(eventId);
-        long baseCount = Math.max(1, registered + attended);
-        double rate = Math.min(100.0, Math.round((attended / (double) baseCount) * 1000.0) / 10.0);
+        long registered = registrationRepository.countByEventIdAndStatusIn(
+                eventId, List.of(EventRegistration.Status.REGISTERED, EventRegistration.Status.ATTENDED));
+        long waitlisted = registrationRepository.countByEventIdAndStatus(eventId, EventRegistration.Status.WAITLISTED);
+        double rate = registered == 0
+                ? 0.0
+                : Math.min(100.0, Math.round((attended / (double) registered) * 1000.0) / 10.0);
 
         return new AttendanceReportDto(
                 event.getId(),
@@ -440,7 +493,7 @@ public class EventService {
     }
 
     private EventDto toDto(Event event, UUID userId) {
-        long regCount = registrationRepository.countByEventIdAndStatus(event.getId(), EventRegistration.Status.REGISTERED);
+        long regCount = occupiedSeatCount(event.getId());
         long waitCount = registrationRepository.countByEventIdAndStatus(event.getId(), EventRegistration.Status.WAITLISTED);
 
         boolean isRegistered = false;
@@ -449,7 +502,9 @@ public class EventService {
             Optional<EventRegistration> userReg = registrationRepository.findByEventIdAndUserId(event.getId(), userId);
             if (userReg.isPresent()) {
                 userStatus = userReg.get().getStatus();
-                isRegistered = (userStatus == EventRegistration.Status.REGISTERED || userStatus == EventRegistration.Status.WAITLISTED);
+                isRegistered = (userStatus == EventRegistration.Status.REGISTERED
+                        || userStatus == EventRegistration.Status.WAITLISTED
+                        || userStatus == EventRegistration.Status.ATTENDED);
             }
         }
 
@@ -505,6 +560,25 @@ public class EventService {
         );
     }
 
+    private long occupiedSeatCount(UUID eventId) {
+        return registrationRepository.countByEventIdAndStatusIn(
+                eventId, List.of(EventRegistration.Status.REGISTERED, EventRegistration.Status.ATTENDED));
+    }
+
+    private boolean canManageEvent(Event event, UUID actorId, UUID collegeId) {
+        if (actorId == null) return false;
+        if (isCollegeAdmin(actorId, collegeId)) return true;
+        User actor = userRepository.findById(actorId).orElse(null);
+        if (actor == null || !actor.getCollegeId().equals(collegeId) || actor.getStatus() != User.Status.ACTIVE) {
+            return false;
+        }
+        return membershipRepository.findByClubAndUser(event.getPrimaryClub(), actor)
+                .filter(m -> m.getStatus() == Membership.Status.ACTIVE && m.getRole() != null)
+                .map(m -> m.getRole().getPermissions().contains("MANAGE_MEMBERS")
+                        || m.getRole().getPermissions().contains("MANAGE_EVENTS"))
+                .orElse(false);
+    }
+
     private void requireOfficerOrAdmin(Club club, UUID actorId, UUID collegeId) {
         if (isCollegeAdmin(actorId, collegeId)) return;
         User actor = activeUser(actorId, collegeId);
@@ -512,6 +586,18 @@ public class EventService {
         if (m == null || m.getStatus() != Membership.Status.ACTIVE || m.getRole() == null ||
                 (!m.getRole().getPermissions().contains("MANAGE_MEMBERS") && !m.getRole().getPermissions().contains("MANAGE_EVENTS"))) {
             throw new AccessDeniedException("Club officer or event organizer permission required");
+        }
+    }
+
+    private void validateSchedule(Instant startsAt, Instant endsAt, Instant registrationOpensAt, Instant registrationClosesAt) {
+        if (!endsAt.isAfter(startsAt)) {
+            throw new IllegalArgumentException("Event end time must be after the start time");
+        }
+        if (registrationOpensAt != null && registrationClosesAt != null && !registrationClosesAt.isAfter(registrationOpensAt)) {
+            throw new IllegalArgumentException("Registration close time must be after the registration open time");
+        }
+        if (registrationClosesAt != null && registrationClosesAt.isAfter(endsAt)) {
+            throw new IllegalArgumentException("Registration cannot close after the event ends");
         }
     }
 

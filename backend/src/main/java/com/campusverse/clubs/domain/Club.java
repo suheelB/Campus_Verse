@@ -21,7 +21,9 @@ import com.campusverse.identity.domain.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
@@ -96,6 +98,7 @@ public class Club {
     private String contactEmail;
 
     @Column(name = "social_links", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     @Builder.Default
     private String socialLinks = "{}";
 

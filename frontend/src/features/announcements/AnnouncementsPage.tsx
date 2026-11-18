@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, Eye, Loader2, Megaphone, Plus, ShieldAlert } from 'lucide-react'
 import { announcementsApi } from '@/services/announcementsApi'
+import { apiErrorMessage } from '@/services/api'
 import { clubsApi } from '@/services/clubsApi'
 import { useAuth } from '@/features/auth/AuthContext'
 import type { Announcement } from '@/types/announcement'
@@ -29,7 +30,7 @@ export function AnnouncementsPage() {
   const officerMemberships = (memberships.data || []).filter(
     (m) => m.status === 'ACTIVE' && m.roleName?.toLowerCase().includes('officer')
   )
-  const canPublish = officerMemberships.length > 0 || user?.collegeId != null
+  const canPublish = officerMemberships.length > 0 || !!user?.collegeAdmin
 
   const createAnnouncement = useMutation({
     mutationFn: announcementsApi.create,
@@ -42,8 +43,8 @@ export function AnnouncementsPage() {
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] }),
       ])
     },
-    onError: (error: any) =>
-      setNotice(error.response?.data?.message || 'Could not publish announcement.'),
+    onError: (error: unknown) =>
+      setNotice(apiErrorMessage(error, 'Could not publish announcement.')),
   })
 
   const acknowledgeMutation = useMutation({
@@ -117,7 +118,7 @@ export function AnnouncementsPage() {
                     {m.clubName} (Club)
                   </option>
                 ))}
-                <option value="COLLEGE">College-wide (Administrators only)</option>
+                {user?.collegeAdmin && <option value="COLLEGE">College-wide (Administrators only)</option>}
               </select>
             </label>
 

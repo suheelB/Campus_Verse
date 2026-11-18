@@ -156,11 +156,19 @@ CampusVerse uses PostgreSQL as the relational data store. All primary keys are U
 
 ### `audit_logs`
 - `id` UUID PK
-- `college_id` UUID FK REFERENCES colleges(id)
-- `actor_user_id` UUID FK REFERENCES users(id)
+- `college_id` UUID FK REFERENCES colleges(id) ON DELETE CASCADE
+- `actor_user_id` UUID FK REFERENCES users(id) ON DELETE SET NULL
 - `action` VARCHAR(100) NOT NULL
-- `resource_type` VARCHAR(100) NOT NULL
-- `resource_id` UUID
-- `occurred_at` TIMESTAMPTZ NOT NULL
-- `correlation_id` VARCHAR(100)
-- `metadata_json` TEXT
+- `entity_type` VARCHAR(100) NOT NULL
+- `entity_id` UUID
+- `details` JSONB
+- `ip_address` VARCHAR(64)
+- `created_at` TIMESTAMPTZ NOT NULL
+- Indexes: `(college_id, created_at DESC)`, `(actor_user_id, created_at DESC)`, `(entity_type, entity_id)`, `(college_id, action, created_at DESC)`
+
+### `revoked_tokens`
+- `jti` UUID PK
+- `user_id` UUID FK REFERENCES users(id) ON DELETE CASCADE
+- `expires_at` TIMESTAMPTZ NOT NULL
+- `revoked_at` TIMESTAMPTZ NOT NULL
+- Index: `(expires_at)` for the hourly purge job

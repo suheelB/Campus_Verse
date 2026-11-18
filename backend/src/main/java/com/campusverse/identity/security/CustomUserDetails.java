@@ -29,6 +29,10 @@ public class CustomUserDetails implements UserDetails {
         return collegeId;
     }
 
+    public String getEmail() {
+        return email;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return authorities;

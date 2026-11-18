@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiClient } from './api'
 import { announcementsApi } from './announcementsApi'
 import { notificationsApi } from './notificationsApi'
+import type { AnnouncementRequest } from '@/types/announcement'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -15,11 +16,11 @@ describe('announcementsApi', () => {
   })
 
   it('posts announcement creation', async () => {
-    const data = { title: 'Test', body: 'Body' }
+    const data: AnnouncementRequest = { title: 'Test', body: 'Body' }
     const res = { id: 'ann-1', ...data }
     const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: res } as never)
 
-    await expect(announcementsApi.create(data as any)).resolves.toBe(res)
+    await expect(announcementsApi.create(data)).resolves.toBe(res)
     expect(post).toHaveBeenCalledWith('/announcements', data)
   })
 

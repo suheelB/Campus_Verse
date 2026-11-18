@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { BookOpen, Mail, Lock, User, Eye, EyeOff, AlertCircle, Building2 } from 'lucide-react'
+import { Mail, Lock, User, Eye, EyeOff, AlertCircle, Building2 } from 'lucide-react'
 import { useAuth } from './AuthContext'
 import type { ApiResponse } from '@/types/auth'
 
@@ -60,26 +60,45 @@ export function RegisterPage() {
       })
       navigate('/dashboard')
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: ApiResponse<unknown>; status?: number } }
-      setError(axiosError.response?.data?.message || 'Registration failed. Please try again.')
+      const axiosError = err as {
+        response?: { data?: ApiResponse<unknown> | { message?: string; error?: string }; status?: number }
+        message?: string
+      }
+      const respData = axiosError.response?.data as { message?: string; error?: string } | undefined
+      const backendMessage = respData?.message || respData?.error
+      if (backendMessage) {
+        setError(backendMessage)
+      } else if (!axiosError.response || axiosError.response.status === 500 || axiosError.response.status === 502 || axiosError.response.status === 503 || axiosError.response.status === 504) {
+        setError('Backend server is not running on port 8080. Please start Docker/backend first.')
+      } else if (axiosError.response.status === 409) {
+        setError('An account with this email already exists.')
+      } else {
+        setError('Registration failed. Please check your details and try again.')
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-[calc(100vh-200px)] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[calc(100vh-120px)] flex items-center justify-center px-4 py-12 bg-gray-50/50">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 font-bold text-2xl text-primary-600 mb-6">
-            <BookOpen className="h-8 w-8" />
+          <Link to="/" className="inline-flex items-center gap-2.5 font-bold text-2xl text-gray-900 mb-6">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-600">
+              <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                <polyline points="2 17 12 22 22 17" />
+                <polyline points="2 12 12 17 22 12" />
+              </svg>
+            </div>
             <span>CampusVerse</span>
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Create your account</h1>
-          <p className="text-gray-600 mt-2">Join your campus community today</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Create your account</h1>
+          <p className="text-gray-500 mt-2">Join your campus community today</p>
         </div>
 
-        <div className="card p-6 sm:p-8">
+        <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-xl shadow-gray-200/50">
           {error && (
             <div className="mb-6 flex items-center gap-2 p-4 rounded-lg bg-red-50 text-red-700 text-sm">
               <AlertCircle className="h-5 w-5 flex-shrink-0" />

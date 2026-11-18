@@ -2,6 +2,7 @@ package com.campusverse.identity.security;
 
 import com.campusverse.identity.domain.User;
 import com.campusverse.identity.repository.UserRepository;
+import com.campusverse.identity.service.TokenRevocationService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,6 +27,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
+    private final TokenRevocationService tokenRevocationService;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -33,7 +35,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                      @NonNull FilterChain filterChain) throws ServletException, IOException {
         String token = getTokenFromRequest(request);
 
-        if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
+        if (StringUtils.hasText(token)
+                && jwtTokenProvider.validateToken(token)
+                && !tokenRevocationService.isRevoked(jwtTokenProvider.getTokenId(token))) {
             UUID userId = jwtTokenProvider.getUserIdFromToken(token);
             Optional<User> userOpt = userRepository.findById(userId);
 
