@@ -24,18 +24,27 @@
 
 ### Verification
 - `npm --prefix frontend run build`: passed cleanly (`tsc -b && vite build`).
-- `npm --prefix frontend test`: 4/4 unit tests passed with Vitest.
-- `mvn test`: 5/5 unit tests passed in `ClubServiceTest`.
-- PostgreSQL/Flyway runtime migration: verified V1-V4 tables and constraints active in PostgreSQL.
+- `npm --prefix frontend test`: 14/14 unit tests passed (3 files).
+- `mvn test`: 36 run, 0 failures, 1 opt-in skip, BUILD SUCCESS.
+- PostgreSQL/Flyway runtime migration: verified V1-V7 applied; `flyway_schema_history` shows success.
 - Docker containers: `campusverse-backend`, `campusverse-frontend`, and `campusverse-postgres` verified operational.
+- Playwright E2E: 1/1 MVP journey passed (31.4s).
 
 ### Known limitations and remaining work
 - College administrators must be provisioned through a trusted administrative process into `platform_role_assignments`; public registration cannot grant privileged roles.
 - Membership capacity limits are not currently enforced, and club privacy modes beyond public clubs are not surfaced in this MVP UI.
 - Sensitive club and membership decisions are permission-checked and persisted, but audit logging table is scheduled for Milestone 7.
+- P1: Collaboration features (Volunteer Opportunity Board) are in early implementation; database migration, backend APIs, and frontend component created; unit tests pending.
 
-## Milestone 4 — Announcements and notifications
-**Status:** Completed and verified.
+## P1: Collaboration — Volunteer Opportunity Board (in progress)
+- **Database migration**: `V8__volunteer_opportunities.sql` — created `volunteer_opportunities` table with college/club/volunteer scoping, status, role, skills, hours tracking.
+- **Backend**: Created `VolunteerOpportunity` entity, `VolunteerOpportunityRepository`, `VolunteerOpportunityService`, `VolunteerOpportunityController` with `POST /volunteer`, `GET /volunteer/pending/{collegeId}`, `POST /volunteer/{id}/approve`, `POST /volunteer/{id}/reject`, `GET /volunteer/has-applied/{clubId}`.
+- **Frontend**: Created `VolunteerOpportunityBoard` component with opportunity creation form, pending list for admins, and application status checks.
+- **Authorization**: College administrators can create and view pending opportunities; students can check if they've applied; cross-college scoping enforced.
+- **Tests**: Unit tests to be added for service layer.
+- **Documentation**: Updated `docs/implementation-progress.md` with P1 feature status.
+
+## Milestone 7 — Security, quality, and pilot readiness
 
 ### Implemented in this work
 - Added Flyway V5 migration (`V5__announcements_notifications.sql`) defining `announcements`, `announcement_receipts`, and `notifications` tables with foreign keys and deduplication indexes.

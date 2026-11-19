@@ -51,5 +51,6 @@ frontend/vite.config.js
 frontend/vite.config.d.ts
 .vercel
 .netlify
-# Nested skill clone (tracked upstream, contains its own .git)
-.agents/skills/ui-ux-pro-max-skill/
+
+# Local agent skills and rules (kept out of the repository)
+.agents/
